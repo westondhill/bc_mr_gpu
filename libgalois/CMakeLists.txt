@@ -14,9 +14,9 @@ set(sources
         src/Statistics.cpp
         src/Barrier.cpp
         src/Barrier_Counting.cpp
-        src/Barrier_Dissemination.cpp 
+        src/Barrier_Dissemination.cpp
         src/Barrier_MCS.cpp
-        src/Barrier_Topo.cpp 
+        src/Barrier_Topo.cpp
         src/Barrier_Pthread.cpp
         src/Barrier_Simple.cpp
         src/gIO.cpp
@@ -54,13 +54,13 @@ if (CMAKE_HAVE_PTHREAD_H)
    target_link_libraries(galois_shmem Threads::Threads)
 endif()
 
-find_package(NUMA)
-if(NUMA_FOUND)
-  add_definitions(-DGALOIS_USE_NUMA)
-  target_link_libraries(galois_shmem ${NUMA_LIBRARY})
-else()
-  message(WARNING "No NUMA Support.  Likely poor performance for multi-socket systems.")
-endif()
+#find_package(NUMA)
+#if(NUMA_FOUND)
+    #add_definitions(-DGALOIS_USE_NUMA)
+    #target_link_libraries(galois_shmem ${NUMA_LIBRARY})
+    #else()
+    #message(WARNING "No NUMA Support.  Likely poor performance for multi-socket systems.")
+    #endif()
 
 if (VTune_FOUND)
   target_link_libraries(galois_shmem ${VTune_LIBRARIES})
@@ -72,8 +72,8 @@ target_include_directories(galois_shmem_obj PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:${RELATIVE_INCLUDE_FROM_INSTALL_PREFIX}>
 )
-set_target_properties (galois_shmem_obj PROPERTIES 
-  INTERFACE_POSITION_INDEPENDENT_CODE On 
+set_target_properties (galois_shmem_obj PROPERTIES
+  INTERFACE_POSITION_INDEPENDENT_CODE On
   POSITION_INDEPENDENT_CODE On
 )
 

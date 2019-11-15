@@ -26,8 +26,13 @@ constexpr static const char* const REGION_NAME = "MRBC";
 
 #include <iostream>
 
+#ifdef __GALOIS_HET_CUDA__
+#include "bc_mr_cuda.h"
+struct CUDA_Context* cuda_ctx;
+#else
 // type of short path
 using ShortPathType = double;
+#endif
 
 /**
  * Structure for holding data calculated during BC
@@ -116,6 +121,16 @@ galois::graphs::GluonSubstrate<Graph>* syncSubstrate;
 void InitializeGraph(Graph& graph) {
   const auto& allNodes = graph.allNodesRange();
 
+  #ifdef __GALOIS_HET_CUDA__
+  if (personality == GPU_CUDA) {
+    std::string impl_str("InitializeGraph");
+    galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
+    StatTimer_cuda.start();
+    // InitializeGraph_allNodes_cuda(cuda_ctx);
+    StatTimer_cuda.stop();
+  } else if (personality == CPU)
+  #endif
+
   galois::do_all(
       galois::iterate(allNodes.begin(), allNodes.end()),
       [&](GNode curNode) {
@@ -137,7 +152,15 @@ void InitializeGraph(Graph& graph) {
 void InitializeIteration(Graph& graph,
                          const std::vector<uint64_t>& nodesToConsider) {
   const auto& allNodes = graph.allNodesRange();
-
+#ifdef __GALOIS_HET_CUDA__
+  if (personality == GPU_CUDA) {
+    std::string impl_str("InitializeIteration");
+    galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
+    StatTimer_cuda.start();
+    //InitializeIteration_allNodes_cuda();
+    StatTimer_cuda.stop();
+  } else if (personality == CPU)                                         
+#endif
   galois::do_all(
       galois::iterate(allNodes.begin(), allNodes.end()),
       [&](GNode curNode) {
@@ -175,6 +198,15 @@ void FindMessageToSync(Graph& graph, const uint32_t roundNumber,
                        galois::DGAccumulator<uint32_t>& dga) {
   const auto& allNodes = graph.allNodesRange();
 
+#ifdef __GALOIS_HET_CUDA__
+  if (personality == GPU_CUDA) {
+    std::string impl_str("FindMessageToSync");
+    galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
+    StatTimer_cuda.start();
+    // FindMessageToSync_cuda();
+    StatTimer_cuda.stop();
+  } else if (personality == CPU)
+#endif
   galois::do_all(
       galois::iterate(allNodes.begin(), allNodes.end()),
       [&](GNode curNode) {
@@ -208,6 +240,15 @@ void ConfirmMessageToSend(Graph& graph, const uint32_t roundNumber,
                           galois::DGAccumulator<uint32_t>& dga) {
   const auto& allNodes = graph.allNodesRange();
 
+#ifdef __GALOIS_HET_CUDA__
+  if (personality == GPU_CUDA) {
+    std::string impl_str("ConfirmMessageToSend");
+    galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
+    StatTimer_cuda.start();
+    // ConfirmMessageToSend_cuda();
+    StatTimer_cuda.stop()
+  } else if (personality == CPU)
+#endif
   galois::do_all(
       galois::iterate(allNodes.begin(), allNodes.end()),
       [&](GNode curNode) {
@@ -268,6 +309,15 @@ void SendAPSPMessagesOp(GNode dst, Graph& graph, galois::DGAccumulator<uint32_t>
 void SendAPSPMessages(Graph& graph, galois::DGAccumulator<uint32_t>& dga) {
   const auto& allNodesWithEdges = graph.allNodesWithEdgesRange();
 
+#ifdef __GALOIS_HET_CUDA__
+  if (personality == GPU_CUDA) {
+    std::string impl_str("SendAPSPMessages");
+    galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
+    StatTimer_cuda.start();
+    // SendAPSPMessages_cuda();
+    StatTimer_cuda.stop();
+  } else if (personality == CPU)
+#endif
   galois::do_all(
       galois::iterate(allNodesWithEdges),
       [&](GNode dst) {
@@ -329,6 +379,14 @@ void RoundUpdate(Graph& graph) {
   const auto& allNodes = graph.allNodesRange();
   syncSubstrate->set_num_round(0);
 
+#ifdef __GALOIS_HET_CUDA__
+  if (personality == GPU_CUDA) {
+    std::string impl_str("RoundUpdate");
+    galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
+    // RoundUpdate_cuda();
+    StatTimer_cuda.stop();
+  } else if (personality == CPU)
+#endif
   galois::do_all(
       galois::iterate(allNodes.begin(), allNodes.end()),
       [&](GNode node) {
@@ -350,6 +408,15 @@ void BackFindMessageToSend(Graph& graph, const uint32_t roundNumber,
   // that needs to be sync'd
   const auto& allNodes = graph.allNodesRange();
 
+
+#ifdef __GALOIS_HET_CUDA__
+  if (personality == GPU_CUDA) {
+    std::string impl_str("BackFindMessageToSend");
+    galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
+    // BackFindMessageToSend_cuda();
+    StatTimer_cuda.stop();
+  } else if (personality == CPU)
+#endif
   galois::do_all(
       galois::iterate(allNodes.begin(), allNodes.end()),
       [&](GNode dst) {
@@ -459,6 +526,14 @@ void BC(Graph& graph, const std::vector<uint64_t>& nodesToConsider) {
   const auto& masterNodes = graph.masterNodesRange();
   syncSubstrate->set_num_round(0);
 
+#ifdef __GALOIS_HET_CUDA__
+  if (personality == GPU_CUDA) {
+    std::string impl_str("BC");
+    galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
+    // BC_masterNodes_cuda(cuda_ctx);
+    StatTimer_cuda.stop();
+  } else if (personality == CPU)
+#endif
   galois::do_all(
       galois::iterate(masterNodes.begin(), masterNodes.end()),
       [&](GNode node) {
@@ -488,6 +563,15 @@ void Sanity(Graph& graph) {
   DGA_min.reset();
   DGA_sum.reset();
 
+#ifdef __GALOIS_HET_CUDA__
+  if (personality == GPU_CUDA) {
+    std::string impl_str("Sanity");
+    galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
+    StatTimer_cuda.start();
+    // Sanity_cuda();
+    StatTimer_cuda.stop();
+  } else if (personality == CPU)
+#endif
   galois::do_all(galois::iterate(graph.masterNodesRange().begin(),
                                  graph.masterNodesRange().end()),
                  [&](auto src) {
@@ -533,8 +617,12 @@ int main(int argc, char** argv) {
 
   galois::gPrint("[", net.ID, "] InitializeGraph\n");
   Graph* hg;
+#ifdef __GALOIS_HET_CUDA__
+  std::tie(hg, syncSubstrate) = distGraphInitialization<NodeData, void>(&cuda_ctx);  
+#else
   // false = iterate over in edges
   std::tie(hg, syncSubstrate) = distGraphInitialization<NodeData, void, false>();
+#endif
 
   if (totalNumSources == 0) {
     galois::gDebug("Total num sources unspecified");
@@ -693,12 +781,20 @@ int main(int argc, char** argv) {
       galois::runtime::getHostBarrier().wait();
       (*syncSubstrate).set_num_run(run + 1);
       (*syncSubstrate).set_num_round(0);
-      offset             = 0;
+      offset = 0;
       macroRound = 0;
       numSourcesPerRound = origNumRoundSources;
 
-      bitset_dependency.reset();
-      bitset_minDistances.reset();
+#ifdef __GALOIS_HET_CUDA__
+      if (personality == GPU_CUDA) {
+        bitset_dependency_reset_cuda(cuda_ctx);
+        bitset_minDistances_reset_cuda(cuda_ctx);
+      } else if (personality == CPU)
+#endif
+      {
+        bitset_dependency.reset();
+        bitset_minDistances.reset();
+      }
 
       InitializeGraph(*hg);
       galois::runtime::getHostBarrier().wait();

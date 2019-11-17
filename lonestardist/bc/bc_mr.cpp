@@ -20,9 +20,10 @@
 constexpr static const char* const REGION_NAME = "MRBC";
 
 #include "galois/DistGalois.h"
+#include "galois/gstl.h"
+#include "DistBenchStart.h"
 #include "galois/DReducible.h"
 #include "galois/runtime/Tracer.h"
-#include "DistBenchStart.h"
 
 #include <iostream>
 
@@ -246,7 +247,7 @@ void ConfirmMessageToSend(Graph& graph, const uint32_t roundNumber,
     galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
     StatTimer_cuda.start();
     // ConfirmMessageToSend_cuda();
-    StatTimer_cuda.stop()
+    StatTimer_cuda.stop();
   } else if (personality == CPU)
 #endif
   galois::do_all(
@@ -352,8 +353,10 @@ uint32_t APSP(Graph& graph, galois::DGAccumulator<uint32_t>& dga) {
     FindMessageToSync(graph, roundNumber, dga);
 
     // Template para's are struct names
-    syncSubstrate->sync<writeAny, readAny, APSPReduce,
-               Bitset_minDistances>(std::string("APSP"));
+    // TODO: WESTON: write sync for hash of bitsets
+    //               ucomment this once mrbc_sync.hh gets uncommented
+    //syncSubstrate->sync<writeAny, readAny, APSPReduce,
+    //           Bitset_minDistances>(std::string("APSP"));
 
     // confirm message to send after sync potentially changes what you were
     // planning on sending
@@ -497,9 +500,10 @@ void BackProp(Graph& graph, const uint32_t lastRoundNumber) {
 
     // write destination in this case being the source in the actual graph
     // since we're using the tranpose graph
-    syncSubstrate->sync<writeDestination, readSource, DependencyReduce,
-               Bitset_dependency>(
-        std::string("DependencySync"));
+    // TODO: WESTON: write sync for hash of bitsets
+    //syncSubstrate->sync<writeDestination, readSource, DependencyReduce,
+    //           Bitset_dependency>(
+    //    std::string("DependencySync"));
 
     galois::do_all(
         galois::iterate(allNodesWithEdges),
@@ -786,9 +790,10 @@ int main(int argc, char** argv) {
       numSourcesPerRound = origNumRoundSources;
 
 #ifdef __GALOIS_HET_CUDA__
+      // TODO: WESTON: write reset for hash of bitsets
       if (personality == GPU_CUDA) {
-        bitset_dependency_reset_cuda(cuda_ctx);
-        bitset_minDistances_reset_cuda(cuda_ctx);
+        //bitset_dependency_reset_cuda(cuda_ctx);
+        //bitset_minDistances_reset_cuda(cuda_ctx);
       } else if (personality == CPU)
 #endif
       {

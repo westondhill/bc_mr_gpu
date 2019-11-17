@@ -197,5 +197,6 @@ struct DependencyReduce {
 // Bitsets
 ////////////////////////////////////////////////////////////////////////////////
 
-GALOIS_SYNC_STRUCTURE_BITSET(minDistances);
-GALOIS_SYNC_STRUCTURE_BITSET(dependency);
+// TODO: WESTON: write sync for hash of bitsets
+//GALOIS_SYNC_STRUCTURE_BITSET(minDistances);
+//GALOIS_SYNC_STRUCTURE_BITSET(dependency);

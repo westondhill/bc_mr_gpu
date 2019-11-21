@@ -505,6 +505,14 @@ void BackProp(Graph& graph, const uint32_t lastRoundNumber) {
     //           Bitset_dependency>(
     //    std::string("DependencySync"));
 
+#ifdef __GALOIS_HET_CUDA__
+  if (personality == GPU_CUDA) {
+    std::string impl_str("BackProp");
+    galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
+    // BackProp_cuda();
+    StatTimer_cuda.stop();
+  } else if (personality == CPU)
+#endif
     galois::do_all(
         galois::iterate(allNodesWithEdges),
         [&](GNode dst) {

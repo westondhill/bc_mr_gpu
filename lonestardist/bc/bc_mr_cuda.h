@@ -16,11 +16,11 @@ using ShortPathType = double;
 //
 //void bitset_dependency_reset_cuda(struct CUDA_Context* ctx);
 //void bitset_minDistances_reset_cuda(struct CUDA_Context* ctx);
-
+void setCUDAVectorSize(struct CUDA_Context* ctx, unsigned vectorSize);
 void InitializeGraph_allNodes_cuda(struct CUDA_Context* ctx);
 void InitializeIteration_allNodes_cuda(
     const uint32_t & local_infinity, 
-    const uint64_t & local_current_src_node, 
+    const uint64_t &  nodeToConsider,
     struct CUDA_Context*  ctx);
 void FindMessageToSync_cuda(
     uint32_t roundNumber,

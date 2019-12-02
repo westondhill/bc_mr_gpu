@@ -564,7 +564,9 @@ int main(int argc, char** argv) {
   StatTimer_total.start();
 
   Graph* h_graph;
+  galois::gPrint("Elena about to call distGraphInitialization\n");
 #ifdef __GALOIS_HET_CUDA__
+  galois::gPrint("Elena in CUDA if\n");
   std::tie(h_graph, syncSubstrate) = distGraphInitialization<NodeData, void>(&cuda_ctx);
 #else
   std::tie(h_graph, syncSubstrate) = distGraphInitialization<NodeData, void>();

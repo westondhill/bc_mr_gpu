@@ -34,8 +34,7 @@ __global__ void InitializeGraph_kernel(
    unsigned nthreads = TOTAL_THREADS_1D;
 
    //const unsigned __kernel_tb_size = TB_SIZE;
-   index_type src_end;
-   src_end = __end;
+   index_type src_end =  __end;
    for (index_type src = __begin + tid; src < src_end; src += nthreads)
    {
        p_bc[src] = 0;
@@ -56,7 +55,6 @@ void InitializeGraph_allNodes_cuda(struct CUDA_Context* ctx) {
 
   cudaDeviceSynchronize();
   check_cuda_kernel;
-
 }
 
 
@@ -90,36 +88,36 @@ __global__ void InitializeIteration_kernel(
         unsigned int __end, 
         uint64_t local_current_src_node,
         uint32_t local_infinity,
-        uint32_t * p_bcData_minDistance,
-        double   * p_bcData_shortPathCount,
-        float    * p_bcData_dependencyValue,
+        unsigned int numSourcesPerRound,
+        uint32_t * p_minDistance,
+        double   * p_shortPathCount,
+        float    * p_dependencyValue,
         uint32_t * p_roundIndexToSend)
  {
-   unsigned tid = TID_1D;
-   unsigned nthreads = TOTAL_THREADS_1D;
+  unsigned tid = TID_1D;
+  unsigned nthreads = TOTAL_THREADS_1D;
 
-   //const unsigned __kernel_tb_size = TB_SIZE;
-   index_type src_end;
-   src_end = __end;
-   for (index_type src = __begin + tid; src < src_end; src += nthreads)
-   {
-       p_roundIndexToSend[src] = local_infinity;
-       // TODO: WESTON: dTree.initialize()
-       // TODO: WESTON: numSourcesPerRound hard-coded to 1
-
-       if (graph.node_data[src] == local_current_src_node) {
-           p_bcData_minDistance[src] = 0;
-           p_bcData_shortPathCount[src] = 1;
-           p_bcData_dependencyValue[src] = 0.0;
-           // TODO: WESTON: dTree.setDistance(0, 0)
+  //const unsigned __kernel_tb_size = TB_SIZE;
+  index_type src_end;
+  src_end = __end;
+  for (index_type src = __begin + tid; src < src_end; src += nthreads) {
+    p_roundIndexToSend[src] = local_infinity;
+    // TODO: WESTON: dTree.initialize()
+    for (index_type i = 0; i < numSourcesPerRound; i++) {
+      unsigned int index = src * i;
+      if (graph.node_data[src] == local_current_src_node) {
+        p_minDistance[index] = 0;
+        p_shortPathCount[index] = 1;
+        p_dependencyValue[index] = 0.0;
+        // TODO: WESTON: dTree.setDistance(0, 0)
        } else {
-           p_bcData_minDistance[src] = local_infinity;
-           p_bcData_shortPathCount[src] = 0;
-           p_bcData_dependencyValue[src] = 0.0;
+         p_minDistance[index] = local_infinity;
+         p_shortPathCount[index] = 0;
+         p_dependencyValue[index] = 0.0;
        }
-
-   }
- }
+     }
+  }
+}
 
 void InitializeIteration_allNodes_cuda(
     const uint32_t & local_infinity, 
@@ -137,9 +135,10 @@ void InitializeIteration_allNodes_cuda(
           ctx->gg.nnodes, 
           local_current_src_node,
           local_infinity,
-          ctx->bcData_minDistance.data.gpu_wr_ptr(),
-          ctx->bcData_shortPathCount.data.gpu_wr_ptr(),
-          ctx->bcData_dependencyValue.data.gpu_wr_ptr(),
+          ctx->vectorSize,
+          ctx->minDistance.data.gpu_wr_ptr(),
+          ctx->shortPathCount.data.gpu_wr_ptr(),
+          ctx->dependencyValue.data.gpu_wr_ptr(),
           // TODO: WESTON: hash map info?
           ctx->roundIndexToSend.data.gpu_wr_ptr());
 

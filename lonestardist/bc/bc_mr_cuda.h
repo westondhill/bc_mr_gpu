@@ -20,7 +20,7 @@ void setCUDAVectorSize(struct CUDA_Context* ctx, unsigned vectorSize);
 void InitializeGraph_allNodes_cuda(struct CUDA_Context* ctx);
 void InitializeIteration_allNodes_cuda(
     const uint32_t & local_infinity, 
-    const uint64_t &  nodeToConsider,
+    const uint64_t*  nodeToConsider,
     struct CUDA_Context*  ctx);
 void FindMessageToSync_cuda(
     uint32_t roundNumber,

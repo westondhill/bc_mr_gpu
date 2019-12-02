@@ -165,7 +165,7 @@ void InitializeIteration(Graph& graph,
     std::string impl_str("InitializeIteration");
     galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
     StatTimer_cuda.start();
-    //InitializeIteration_allNodes_cuda(&infinity, &(nodesToConsider[0]), cuda_ctx);
+    InitializeIteration_allNodes_cuda(infinity, nodesToConsider.data(), cuda_ctx);
     StatTimer_cuda.stop();
     galois::gPrint("Finished InitializeIteration kernel\n");
   } else if (personality == CPU)                                         

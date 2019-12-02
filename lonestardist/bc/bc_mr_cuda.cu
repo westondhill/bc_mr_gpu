@@ -86,7 +86,7 @@ __global__ void InitializeIteration_kernel(
         CSRGraph graph, 
         unsigned int __begin, 
         unsigned int __end, 
-        uint64_t local_current_src_node,
+        uint64_t *  cuda_nodes_to_consider,
         uint32_t local_infinity,
         unsigned int numSourcesPerRound,
         uint32_t * p_minDistance,
@@ -104,8 +104,8 @@ __global__ void InitializeIteration_kernel(
     p_roundIndexToSend[src] = local_infinity;
     // TODO: WESTON: dTree.initialize()
     for (index_type i = 0; i < numSourcesPerRound; i++) {
-      unsigned int index = src * i;
-      if (graph.node_data[src] == local_current_src_node) {
+      unsigned int index = src + (i * __end);
+      if (graph.node_data[src] == cuda_nodes_to_consider[i]) {
         p_minDistance[index] = 0;
         p_shortPathCount[index] = 1;
         p_dependencyValue[index] = 0.0;
@@ -121,19 +121,24 @@ __global__ void InitializeIteration_kernel(
 
 void InitializeIteration_allNodes_cuda(
     const uint32_t & local_infinity, 
-    const uint64_t & local_current_src_node, 
+    const uint64_t* local_nodes_to_consider, 
     struct CUDA_Context*  ctx)
 {
   dim3 blocks;
   dim3 threads;
 
   kernel_sizing(blocks, threads);
-  
+
+  // Make device vector for local_nodes_to_consider
+  uint64_t* cuda_nodes_to_consider;
+  cudaMalloc((void**) &cuda_nodes_to_consider, ctx->vectorSize*sizeof(uint64_t));
+  cudaMemcpy(cuda_nodes_to_consider, local_nodes_to_consider, ctx->vectorSize*sizeof(uint64_t), cudaMemcpyHostToDevice);
+ 
   InitializeIteration_kernel <<<blocks, threads>>>(
           ctx->gg, 
           0, 
           ctx->gg.nnodes, 
-          local_current_src_node,
+          cuda_nodes_to_consider,
           local_infinity,
           ctx->vectorSize,
           ctx->minDistance.data.gpu_wr_ptr(),
@@ -141,7 +146,6 @@ void InitializeIteration_allNodes_cuda(
           ctx->dependencyValue.data.gpu_wr_ptr(),
           // TODO: WESTON: hash map info?
           ctx->roundIndexToSend.data.gpu_wr_ptr());
-
   cudaDeviceSynchronize();
   check_cuda_kernel;
 }

@@ -103,6 +103,9 @@ void load_graph_CUDA(struct CUDA_Context* ctx, MarshalGraph &g, unsigned num_hos
         printf("ctx vectorSize: %u\n", ctx->vectorSize);
   load_graph_CUDA_field(ctx, &ctx->roundIndexToSend, num_hosts);
         load_graph_CUDA_BCData(ctx, num_hosts);
+
+  load_graph_CUDA_field(ctx, &ctx->mrbc_tree, num_hosts);
+
   reset_CUDA_context(ctx);
         printf("exiting load_graph_CUDA\n");
 }

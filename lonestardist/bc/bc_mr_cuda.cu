@@ -601,8 +601,85 @@ void BackFindMessageToSend_cuda(
 // }
 
 
-void BackProp_cuda(struct CUDA_Context* ctx);
+__global__ void BackProp_kernel(
+       CSRGraph graph, 
+       unsigned int __begin, 
+       unsigned int __end, 
+       uint32_t local_infinity,
+       uint32_t * p_minDistance,
+       double   * p_shortPathCount,
+       float    * p_dependencyValue,
+       uint32_t * p_roundIndexToSend,
+       MRBCTree_cuda * p_mrbc_tree)
+{
+    unsigned tid = TID_1D;
+    unsigned nthreads = TOTAL_THREADS_1D;
 
+    //const unsigned __kernel_tb_size = TB_SIZE;
+    index_type dst_end;
+
+    dst_end = __end;
+    for (index_type dst = __begin + tid; dst < dst_end; dst += nthreads)
+    {
+      unsigned i = p_roundIndexToSend[dst];
+
+      if (i != local_infinity) {
+        uint32_t myDistance = p_minDistance[dst + (i * graph.nnodes)];
+
+        p_dependencyValue[dst + (i * graph.nnodes)] = 
+          p_dependencyValue[dst + (i * graph.nnodes)] 
+            * p_shortPathCount[dst + (i * graph.nnodes)];
+
+        float toAdd = ((float)1 + p_dependencyValue[dst + (i * graph.nnodes)]) /
+          p_shortPathCount[dst + (i * graph.nnodes)];
+
+
+        index_type current_edge_end = graph.getFirstEdge((dst) + 1);
+        for (index_type current_edge = graph.getFirstEdge(dst); 
+               current_edge < current_edge_end;   
+               current_edge += 1)
+        {   
+          
+          index_type src = graph.getAbsDestination(current_edge);
+          uint32_t sourceDistance = p_minDistance[src + (i * graph.nnodes)];
+
+          if (sourceDistance != 0) {
+            if (myDistance == (sourceDistance + 1)) {
+              atomicAdd(&p_dependencyValue[src + (i * graph.nnodes)], toAdd);
+            }
+          }
+
+        }
+
+      }
+    }
+
+}
+
+
+void BackProp_cuda(
+    const uint32_t & local_infinity, 
+    struct CUDA_Context*  ctx)
+{
+  dim3 blocks;
+  dim3 threads;
+
+  kernel_sizing(blocks, threads);
+  
+  BackProp_kernel <<<blocks, threads>>>(
+          ctx->gg, 
+          0, 
+          ctx->gg.nnodes, 
+          local_infinity,
+          ctx->minDistance.data.gpu_wr_ptr(),
+          ctx->shortPathCount.data.gpu_wr_ptr(),
+          ctx->dependencyValue.data.gpu_wr_ptr(),
+          ctx->roundIndexToSend.data.gpu_wr_ptr(),
+          ctx->mrbc_tree.data.gpu_wr_ptr());
+
+  cudaDeviceSynchronize();
+  check_cuda_kernel;
+}
 //  galois::do_all(
 //       galois::iterate(masterNodes.begin(), masterNodes.end()),
 //       [&](GNode node) {
@@ -620,7 +697,66 @@ void BackProp_cuda(struct CUDA_Context* ctx);
 
 
 
-void BC_masterNodes_cuda(struct CUDA_Context* ctx);
+__global__ void BC_kernel(
+       CSRGraph graph, 
+       unsigned int __begin, 
+       unsigned int __end, 
+       unsigned int numSourcesPerRound,
+       uint64_t *  cuda_nodes_to_consider,
+       uint32_t * p_minDistance,
+       double   * p_shortPathCount,
+       float    * p_dependencyValue,
+       uint32_t * p_roundIndexToSend,
+       float* p_bc)
+{
+    unsigned tid = TID_1D;
+    unsigned nthreads = TOTAL_THREADS_1D;
+
+    //const unsigned __kernel_tb_size = TB_SIZE;
+    index_type src_end;
+
+    src_end = __end;
+    for (index_type src = __begin + tid; src < src_end; src += nthreads)
+    {
+      for (unsigned i = 0; i < numSourcesPerRound; i++) {
+        if (graph.node_data[src] != cuda_nodes_to_consider[i]) {
+          p_bc[src] += p_dependencyValue[src + (i * graph.nnodes)];
+        }
+      }
+    }
+
+}
+
+
+void BC_cuda(
+    struct CUDA_Context*  ctx,
+    const uint64_t* local_nodes_to_consider)
+{
+  dim3 blocks;
+  dim3 threads;
+
+  kernel_sizing(blocks, threads);
+
+  // Make device vector for local_nodes_to_consider
+  uint64_t* cuda_nodes_to_consider;
+  cudaMalloc((void**) &cuda_nodes_to_consider, ctx->vectorSize*sizeof(uint64_t));
+  cudaMemcpy(cuda_nodes_to_consider, local_nodes_to_consider, ctx->vectorSize*sizeof(uint64_t), cudaMemcpyHostToDevice);
+  
+  BC_kernel <<<blocks, threads>>>(
+          ctx->gg, 
+          0, 
+          ctx->gg.nnodes, 
+          ctx->vectorSize,
+          cuda_nodes_to_consider,
+          ctx->minDistance.data.gpu_wr_ptr(),
+          ctx->shortPathCount.data.gpu_wr_ptr(),
+          ctx->dependencyValue.data.gpu_wr_ptr(),
+          ctx->roundIndexToSend.data.gpu_wr_ptr(),
+          ctx->bc.data.gpu_wr_ptr());
+
+  cudaDeviceSynchronize();
+  check_cuda_kernel;
+}
 
 
 //  galois::do_all(galois::iterate(graph.masterNodesRange().begin(),

@@ -17,6 +17,8 @@
  * Documentation, or loss or inaccuracy of data of any kind.
  */
 
+#include "bc_mr_parameters.h"
+
 constexpr static const char* const REGION_NAME = "MRBC";
 
 #include "galois/DistGalois.h"
@@ -645,6 +647,8 @@ int main(int argc, char** argv) {
 
   galois::gPrint("[", net.ID, "] InitializeGraph\n");
   Graph* hg;
+
+  numSourcesPerRound = NUM_SOURCES_PER_ROUND;
 
   if (useSingleSource) {
     totalNumSources    = 1;

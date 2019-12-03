@@ -6,6 +6,9 @@
 #include "bc_mr_cuda.h"
 #include "galois/runtime/cuda/DeviceSync.h"
 
+//#include <thrust/device_vector.h>
+//#include "galois/cuda/DynamicBitset.h"
+
 // TODO: WESTON: use the cuda bitset provided by Galois?
 //#include "mrbc_bitset.hh"
 

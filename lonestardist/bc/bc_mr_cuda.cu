@@ -13,6 +13,8 @@ void kernel_sizing(CSRGraph &, dim3 &, dim3 &);
 //#include "kernels/reduce.cuh"
 #include "bc_mr_cuda.cuh"
 
+#include "mrbc_tree_cuda.cuh"
+
 // TODO: WESTON: figure out how/where to init hashmap
 
 

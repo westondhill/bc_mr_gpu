@@ -88,7 +88,7 @@ __global__ void InitializeIteration_kernel(
         CSRGraph graph, 
         unsigned int __begin, 
         unsigned int __end, 
-        uint64_t local_current_src_node,
+        uint64_t *  cuda_nodes_to_consider,
         uint32_t local_infinity,
         unsigned int numSourcesPerRound,
         uint32_t * p_minDistance,
@@ -106,8 +106,8 @@ __global__ void InitializeIteration_kernel(
     p_roundIndexToSend[src] = local_infinity;
     // TODO: WESTON: dTree.initialize()
     for (index_type i = 0; i < numSourcesPerRound; i++) {
-      unsigned int index = src * i;
-      if (graph.node_data[src] == local_current_src_node) {
+      unsigned int index = src + (i * graph.nnodes);
+      if (graph.node_data[src] == cuda_nodes_to_consider[i]) {
         p_minDistance[index] = 0;
         p_shortPathCount[index] = 1;
         p_dependencyValue[index] = 0.0;
@@ -123,19 +123,24 @@ __global__ void InitializeIteration_kernel(
 
 void InitializeIteration_allNodes_cuda(
     const uint32_t & local_infinity, 
-    const uint64_t & local_current_src_node, 
+    const uint64_t* local_nodes_to_consider, 
     struct CUDA_Context*  ctx)
 {
   dim3 blocks;
   dim3 threads;
 
   kernel_sizing(blocks, threads);
-  
+
+  // Make device vector for local_nodes_to_consider
+  uint64_t* cuda_nodes_to_consider;
+  cudaMalloc((void**) &cuda_nodes_to_consider, ctx->vectorSize*sizeof(uint64_t));
+  cudaMemcpy(cuda_nodes_to_consider, local_nodes_to_consider, ctx->vectorSize*sizeof(uint64_t), cudaMemcpyHostToDevice);
+ 
   InitializeIteration_kernel <<<blocks, threads>>>(
           ctx->gg, 
           0, 
           ctx->gg.nnodes, 
-          local_current_src_node,
+          cuda_nodes_to_consider,
           local_infinity,
           ctx->vectorSize,
           ctx->minDistance.data.gpu_wr_ptr(),
@@ -143,7 +148,6 @@ void InitializeIteration_allNodes_cuda(
           ctx->dependencyValue.data.gpu_wr_ptr(),
           // TODO: WESTON: hash map info?
           ctx->roundIndexToSend.data.gpu_wr_ptr());
-
   cudaDeviceSynchronize();
   check_cuda_kernel;
 }
@@ -174,10 +178,9 @@ __global__ void FindMessageToSync_kernel(
         unsigned int __end, 
         uint32_t roundNumber,
         uint32_t local_infinity,
-        uint32_t * p_bcData_minDistance,
-        double   * p_bcData_shortPathCount,
-        float    * p_bcData_dependencyValue,
+        uint32_t * p_minDistance,
         uint32_t * p_roundIndexToSend,
+        DynamicBitset& bitset_minDistance,
         HGAccumulator<uint32_t> dga)
 {
     unsigned tid = TID_1D;
@@ -197,13 +200,11 @@ __global__ void FindMessageToSync_kernel(
         p_roundIndexToSend[src] = 0; 
 
         if (p_roundIndexToSend[src] != local_infinity) {
-            if (p_bcData_minDistance[src] != 0) {
-              // TODO: WESTON: bitset_minDistances.set(src)
+            if (p_minDistance[p_roundIndexToSend[src] * __end + src] != 0) {
+              bitset_minDistance.set(p_roundIndexToSend[src] * graph.nnodes + src);
             }
-            //  dga += 1
             dga.reduce(1);
         } else if ( /* TODO: WESTON: dTree.moreWork() */ false ) {
-            // dga += 1
             dga.reduce(1);
         }
 
@@ -234,11 +235,10 @@ void FindMessageToSync_cuda(
           ctx->gg.nnodes, 
           roundNumber,
           local_infinity,
-          ctx->bcData_minDistance.data.gpu_wr_ptr(),
-          ctx->bcData_shortPathCount.data.gpu_wr_ptr(),
-          ctx->bcData_dependencyValue.data.gpu_wr_ptr(),
+          ctx->minDistance.data.gpu_rd_ptr(),
           // TODO: WESTON: hash map info?
           ctx->roundIndexToSend.data.gpu_wr_ptr(),
+          *(ctx->minDistance.is_updated.gpu_wr_ptr()), 
           _dga);
 
   cudaDeviceSynchronize();

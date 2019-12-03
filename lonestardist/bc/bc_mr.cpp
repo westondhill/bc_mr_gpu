@@ -167,7 +167,7 @@ void InitializeIteration(Graph& graph,
     std::string impl_str("InitializeIteration");
     galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
     StatTimer_cuda.start();
-    //InitializeIteration_allNodes_cuda(&infinity, &(nodesToConsider[0]), cuda_ctx);
+    InitializeIteration_allNodes_cuda(infinity, nodesToConsider.data(), cuda_ctx);
     StatTimer_cuda.stop();
     galois::gPrint("Finished InitializeIteration kernel\n");
   } else if (personality == CPU)                                         
@@ -208,17 +208,20 @@ void InitializeIteration(Graph& graph,
 void FindMessageToSync(Graph& graph, const uint32_t roundNumber,
                        galois::DGAccumulator<uint32_t>& dga) {
   const auto& allNodes = graph.allNodesRange();
-/*
+
 #ifdef __GALOIS_HET_CUDA__
   if (personality == GPU_CUDA) {
+    galois::gPrint("FindMessageToSync\n");
     std::string impl_str("FindMessageToSync");
     galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
     StatTimer_cuda.start();
-    // FindMessageToSync_cuda();
+    uint32_t retval = 0;
+    FindMessageToSync_cuda(roundNumber, retval, retval, cuda_ctx);
+    dga += retval;
     StatTimer_cuda.stop();
+    galois::gPrint("Finished FindMessageToSync kernel\n");
   } else if (personality == CPU)
 #endif
-*/
   galois::do_all(
       galois::iterate(allNodes.begin(), allNodes.end()),
       [&](GNode curNode) {

@@ -522,6 +522,8 @@ void BackProp(Graph& graph, const uint32_t lastRoundNumber) {
     //syncSubstrate->sync<writeDestination, readSource, DependencyReduce,
     //           Bitset_dependency>(
     //    std::string("DependencySync"));
+
+    // TODO: WESTON: uncomment backprop once implemented
 /*
 #ifdef __GALOIS_HET_CUDA__
   if (personality == GPU_CUDA) {
@@ -556,6 +558,8 @@ void BackProp(Graph& graph, const uint32_t lastRoundNumber) {
 void BC(Graph& graph, const std::vector<uint64_t>& nodesToConsider) {
   const auto& masterNodes = graph.masterNodesRange();
   syncSubstrate->set_num_round(0);
+
+  // TODO: WESTON: uncomment BC code once implemented
 /*
 #ifdef __GALOIS_HET_CUDA__
   if (personality == GPU_CUDA) {

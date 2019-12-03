@@ -15,8 +15,7 @@ void kernel_sizing(CSRGraph &, dim3 &, dim3 &);
 
 #include "mrbc_tree_cuda.cuh"
 
-// TODO: WESTON: figure out how/where to init hashmap
-
+// TODO: WESTON: remove bcData variables
 
 //   galois::do_all(
 //       galois::iterate(allNodes.begin(), allNodes.end()),
@@ -94,7 +93,8 @@ __global__ void InitializeIteration_kernel(
         uint32_t * p_minDistance,
         double   * p_shortPathCount,
         float    * p_dependencyValue,
-        uint32_t * p_roundIndexToSend)
+        uint32_t * p_roundIndexToSend,
+        MRBCTree_cuda * p_mrbc_tree)
  {
   unsigned tid = TID_1D;
   unsigned nthreads = TOTAL_THREADS_1D;
@@ -104,14 +104,14 @@ __global__ void InitializeIteration_kernel(
   src_end = __end;
   for (index_type src = __begin + tid; src < src_end; src += nthreads) {
     p_roundIndexToSend[src] = local_infinity;
-    // TODO: WESTON: dTree.initialize()
+    p_mrbc_tree[src].initialize();
     for (index_type i = 0; i < numSourcesPerRound; i++) {
       unsigned int index = src + (i * graph.nnodes);
       if (graph.node_data[src] == cuda_nodes_to_consider[i]) {
         p_minDistance[index] = 0;
         p_shortPathCount[index] = 1;
         p_dependencyValue[index] = 0.0;
-        // TODO: WESTON: dTree.setDistance(0, 0)
+        p_mrbc_tree[src].setDistance(0, 0);
        } else {
          p_minDistance[index] = local_infinity;
          p_shortPathCount[index] = 0;
@@ -146,8 +146,8 @@ void InitializeIteration_allNodes_cuda(
           ctx->minDistance.data.gpu_wr_ptr(),
           ctx->shortPathCount.data.gpu_wr_ptr(),
           ctx->dependencyValue.data.gpu_wr_ptr(),
-          // TODO: WESTON: hash map info?
-          ctx->roundIndexToSend.data.gpu_wr_ptr());
+          ctx->roundIndexToSend.data.gpu_wr_ptr(),
+          ctx->mrbc_tree.data.gpu_wr_ptr());
   cudaDeviceSynchronize();
   check_cuda_kernel;
 }
@@ -171,7 +171,6 @@ void InitializeIteration_allNodes_cuda(
 //         }
 //       },
 
-// TODO: WESTON: figure out what a DGA accumulator is
 __global__ void FindMessageToSync_kernel(
         CSRGraph graph, 
         unsigned int __begin, 
@@ -180,6 +179,7 @@ __global__ void FindMessageToSync_kernel(
         uint32_t local_infinity,
         uint32_t * p_minDistance,
         uint32_t * p_roundIndexToSend,
+        MRBCTree_cuda * p_mrbc_tree,
         DynamicBitset& bitset_minDistance,
         HGAccumulator<uint32_t> dga)
 {
@@ -195,16 +195,14 @@ __global__ void FindMessageToSync_kernel(
     src_end = __end;
     for (index_type src = __begin + tid; src < src_end; src += nthreads)
     {
-        // TODO: WESTON: dTree.getIndexToSend
-        // TODO: WESTON: roundIndexToSend = src.dTree.getIndexToSend(roundNumber)
-        p_roundIndexToSend[src] = 0; 
+        p_roundIndexToSend[src] = p_mrbc_tree[src].getIndexToSend(roundNumber);
 
         if (p_roundIndexToSend[src] != local_infinity) {
             if (p_minDistance[p_roundIndexToSend[src] * __end + src] != 0) {
               bitset_minDistance.set(p_roundIndexToSend[src] * graph.nnodes + src);
             }
             dga.reduce(1);
-        } else if ( /* TODO: WESTON: dTree.moreWork() */ false ) {
+        } else if ( p_mrbc_tree[src].moreWork() ) {
             dga.reduce(1);
         }
 
@@ -236,8 +234,8 @@ void FindMessageToSync_cuda(
           roundNumber,
           local_infinity,
           ctx->minDistance.data.gpu_rd_ptr(),
-          // TODO: WESTON: hash map info?
           ctx->roundIndexToSend.data.gpu_wr_ptr(),
+          ctx->mrbc_tree.data.gpu_wr_ptr(),
           *(ctx->minDistance.is_updated.gpu_wr_ptr()), 
           _dga);
 
@@ -268,7 +266,8 @@ __global__ void ConfirmMessageToSend_kernel(
         uint32_t * p_bcData_minDistance,
         double   * p_bcData_shortPathCount,
         float    * p_bcData_dependencyValue,
-        uint32_t * p_roundIndexToSend)
+        uint32_t * p_roundIndexToSend,
+        MRBCTree_cuda * p_mrbc_tree)
  {
    unsigned tid = TID_1D;
    unsigned nthreads = TOTAL_THREADS_1D;
@@ -278,7 +277,9 @@ __global__ void ConfirmMessageToSend_kernel(
    src_end = __end;
    for (index_type src = __begin + tid; src < src_end; src += nthreads)
    {
-       // TODO: WESTON: dTree.markSent(roundNumber)
+     if (p_roundIndexToSend[src] != local_infinity) {
+       p_mrbc_tree[src].markSent(roundNumber);
+     }
 
    }
  }
@@ -302,56 +303,13 @@ void ConfirmMessageToSend_cuda(
           ctx->bcData_minDistance.data.gpu_wr_ptr(),
           ctx->bcData_shortPathCount.data.gpu_wr_ptr(),
           ctx->bcData_dependencyValue.data.gpu_wr_ptr(),
-          // TODO: WESTON: hash map info?
-          ctx->roundIndexToSend.data.gpu_wr_ptr());
+          ctx->roundIndexToSend.data.gpu_wr_ptr(),
+          ctx->mrbc_tree.data.gpu_wr_ptr());
 
   cudaDeviceSynchronize();
   check_cuda_kernel;
 }
 
-
-// void BackPropOp(GNode dst, Graph& graph) {
-//   NodeData& dst_data = graph.getData(dst);
-//   unsigned i         = dst_data.roundIndexToSend;
-// 
-//   if (i != infinity) {
-//     uint32_t myDistance = dst_data.sourceData[i].minDistance;
-// 
-//     // calculate final dependency value
-//     dst_data.sourceData[i].dependencyValue =
-//       dst_data.sourceData[i].dependencyValue *
-//         dst_data.sourceData[i].shortPathCount;
-// 
-//     // get the value to add to predecessors
-//     float toAdd = ((float)1 + dst_data.sourceData[i].dependencyValue) /
-//                   dst_data.sourceData[i].shortPathCount;
-// 
-//     for (auto inEdge : graph.edges(dst)) {
-//       GNode src      = graph.getEdgeDst(inEdge);
-//       auto& src_data = graph.getData(src);
-//       uint32_t sourceDistance = src_data.sourceData[i].minDistance;
-// 
-//       // source nodes of this batch (i.e. distance 0) can be safely
-//       // ignored
-//       if (sourceDistance != 0) {
-//         // determine if this source is a predecessor
-//         if (myDistance == (sourceDistance + 1)) {
-//           // add to dependency of predecessor using our finalized one
-//           galois::atomicAdd(src_data.sourceData[i].dependencyValue, toAdd);
-//         }
-//       }   
-//     }   
-//   }
-// }
-//   galois::do_all(
-//       galois::iterate(allNodesWithEdges),
-//       [&](GNode dst) {
-//         SendAPSPMessagesOp(dst, graph, dga);
-//       },
-//       galois::loopname(
-//           syncSubstrate->get_run_identifier("SendAPSPMessages").c_str()),
-//       galois::steal(),
-//       galois::no_stats());
 
 
 __global__ void SendAPSPMessages_kernel(
@@ -363,6 +321,7 @@ __global__ void SendAPSPMessages_kernel(
        double   * p_bcData_shortPathCount,
        float    * p_bcData_dependencyValue,
        uint32_t * p_roundIndexToSend,
+       MRBCTree_cuda * p_mrbc_tree,
        HGAccumulator<uint32_t> dga)
 {
   unsigned tid = TID_1D;
@@ -378,16 +337,15 @@ __global__ void SendAPSPMessages_kernel(
   for (index_type dst = __begin + tid; dst < dst_end; dst += nthreads)
   {
 
-    // TODO: WESTON: missing division code
     index_type current_edge_end = graph.getFirstEdge((dst) + 1);
     for (index_type current_edge = graph.getFirstEdge(dst); 
            current_edge < current_edge_end;   
            current_edge += 1)
     {   
         index_type src = graph.getAbsDestination(current_edge);
-        //uint32_t indexToSend = p_roundIndexToSend[src];
+        uint32_t indexToSend = p_roundIndexToSend[src];
        
-        if (p_roundIndexToSend[dst] != local_infinity) {
+        if (indexToSend != local_infinity) {
             uint32_t distValue = p_bcData_minDistance[src];
             uint32_t newValue  = distValue + 1;
             // Update minDistance vector
@@ -395,7 +353,7 @@ __global__ void SendAPSPMessages_kernel(
 
             if (oldValue > newValue) {
                 p_bcData_minDistance[dst] = newValue;
-                // TODO: WESTON: dst.dTree.setDistance(indexToSend, oldValue, newValue)
+                p_mrbc_tree[dst].setDistance(indexToSend, oldValue, newValue);
                 p_bcData_shortPathCount[dst] = p_bcData_shortPathCount[src];
             } else if (oldValue == newValue) {
                 // assert (p_bcData_shortPathCount[dst]
@@ -441,6 +399,7 @@ void SendAPAPMessages_cuda(
           ctx->bcData_dependencyValue.data.gpu_wr_ptr(),
           // TODO: WESTON: hash map info?
           ctx->roundIndexToSend.data.gpu_wr_ptr(),
+          ctx->mrbc_tree.data.gpu_wr_ptr(),
           _dga);
 
   cudaDeviceSynchronize();
@@ -469,7 +428,8 @@ __global__ void RoundUpdate_kernel(
        uint32_t * p_bcData_minDistance,
        double   * p_bcData_shortPathCount,
        float    * p_bcData_dependencyValue,
-       uint32_t * p_roundIndexToSend)
+       uint32_t * p_roundIndexToSend,
+       MRBCTree_cuda * p_mrbc_tree)
 {
     unsigned tid = TID_1D;
     unsigned nthreads = TOTAL_THREADS_1D;
@@ -480,8 +440,7 @@ __global__ void RoundUpdate_kernel(
     src_end = __end;
     for (index_type src = __begin + tid; src < src_end; src += nthreads)
     {
-        // TODO: WESTON: src.dTree.prepForBackPhase()
-
+      p_mrbc_tree[src].prepForBackPhase();
     }
 
 }
@@ -505,7 +464,8 @@ void RoundUpdate_cuda(
           ctx->bcData_shortPathCount.data.gpu_wr_ptr(),
           ctx->bcData_dependencyValue.data.gpu_wr_ptr(),
           // TODO: WESTON: hash map info?
-          ctx->roundIndexToSend.data.gpu_wr_ptr());
+          ctx->roundIndexToSend.data.gpu_wr_ptr(),
+          ctx->mrbc_tree.data.gpu_wr_ptr());
 
   cudaDeviceSynchronize();
   check_cuda_kernel;
@@ -548,7 +508,8 @@ __global__ void BackFindMessageToSend_kernel(
        uint32_t * p_bcData_minDistance,
        double   * p_bcData_shortPathCount,
        float    * p_bcData_dependencyValue,
-       uint32_t * p_roundIndexToSend)
+       uint32_t * p_roundIndexToSend,
+       MRBCTree_cuda * p_mrbc_tree)
 {
     unsigned tid = TID_1D;
     unsigned nthreads = TOTAL_THREADS_1D;
@@ -559,15 +520,17 @@ __global__ void BackFindMessageToSend_kernel(
     src_end = __end;
     for (index_type src = __begin + tid; src < src_end; src += nthreads)
     {
-        // TODO: WESTON: dTree.isZeroReached
-        // TODO: WESTON: p_roundIndexToSend[src] = dTree.backGetIndexToSend
+      if (p_mrbc_tree[src].isZeroReached()) {
+        p_roundIndexToSend[src] = 
+          p_mrbc_tree[src].backGetIndexToSend(roundNumber, lastRoundNumber);
 
         if (p_roundIndexToSend[src] != local_infinity) {
+             // TODO: WESTON: update this with bitset stuff ELENA?
              //if (dst_data.sourceData[dst_data.roundIndexToSend].dependencyValue != 0) {
              //  bitset_dependency.set(dst);
              //}
         }
-
+      }
     }
 
 }
@@ -595,7 +558,8 @@ void BackFindMessageToSend_cuda(
           ctx->bcData_shortPathCount.data.gpu_wr_ptr(),
           ctx->bcData_dependencyValue.data.gpu_wr_ptr(),
           // TODO: WESTON: hash map info?
-          ctx->roundIndexToSend.data.gpu_wr_ptr());
+          ctx->roundIndexToSend.data.gpu_wr_ptr(),
+          ctx->mrbc_tree.data.gpu_wr_ptr());
 
   cudaDeviceSynchronize();
   check_cuda_kernel;

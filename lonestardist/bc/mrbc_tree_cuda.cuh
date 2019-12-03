@@ -17,6 +17,7 @@
  * Documentation, or loss or inaccuracy of data of any kind.
  */
 
+#pragma once
 
 //#include "mrbc_bitset.hh"
 #include "mrbc_bitset_cuda.cuh"
@@ -65,7 +66,15 @@ public:
    * Reset the map, initialize all distances to infinity, and reset the "sent"
    * vector and num sent sources.
    */
-  __device__ __host__ void initialize() {
+  __device__ void initialize() {
+
+    if (dist_vector) {
+      free(dist_vector);
+    }
+    if (bitset_vector) {
+      free(bitset_vector);
+    }
+
     size = 0;
     capacity = 0;
     // reset number of sent sources
@@ -245,7 +254,7 @@ public:
     sort_by_dist();
 
     curKey = size-1;
-    endCurKey = -1;
+    endCurKey = (uint64_t)(-1);
 
     if (curKey != endCurKey) {
       // find non-empty distance if first one happens to be empty

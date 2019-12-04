@@ -114,7 +114,7 @@ public:
     }
 
     dist_vector[size] = dist;
-    bitset_vector[size].reset();
+    bitset_vector[size].device_conditional_alloc(NUM_SOURCES_PER_ROUND);
     size++;
   }
 

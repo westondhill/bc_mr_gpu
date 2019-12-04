@@ -214,6 +214,15 @@ public:
     }
   }
 
+  __device__ void device_conditional_alloc(size_t nbits) {
+    if (!bit_vector) {
+      num_bits_capacity = nbits;
+      num_bits = nbits;
+      bit_vector = (uint64_t *) malloc(vec_size() * sizeof(uint64_t));
+    }
+    reset();
+  }
+
   // @DynamicBitSet
   __device__ void resize(uint64_t n) {
     assert(num_bits_capacity == 64); // compatibility with other devices

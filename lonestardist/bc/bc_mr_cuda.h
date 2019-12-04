@@ -45,8 +45,12 @@ void BackFindMessageToSend_cuda(
     uint32_t roundNumber,
     uint32_t lastRoundNumber,
     struct CUDA_Context*  ctx);
-void BackProp_cuda(struct CUDA_Context* ctx);
-void BC_masterNodes_cuda(struct CUDA_Context* ctx);
+void BackProp_cuda(
+    const uint32_t & local_infinity,
+    struct CUDA_Context* ctx);
+void BC_masterNodes_cuda(
+    struct CUDA_Context* ctx,
+    const uint64_t* local_nodes_to_consider);
 void Sanity_cuda(struct CUDA_Context* ctx);
 void bitset_dependency_reset_cuda(struct CUDA_Context* ctx);
 void bitset_minDistances_reset_cuda(struct CUDA_Context* ctx);

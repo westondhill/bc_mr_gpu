@@ -14,6 +14,8 @@ void kernel_sizing(CSRGraph &, dim3 &, dim3 &);
 
 #include "mrbc_tree_cuda.cuh"
 
+#include <iostream>
+
 //   galois::do_all(
 //       galois::iterate(allNodes.begin(), allNodes.end()),
 //       [&](GNode curNode) {
@@ -102,6 +104,7 @@ __global__ void InitializeIteration_kernel(
   for (index_type src = __begin + tid; src < src_end; src += nthreads) {
     p_roundIndexToSend[src] = local_infinity;
     p_mrbc_tree[src].initialize();
+
     for (index_type i = 0; i < numSourcesPerRound; i++) {
       unsigned int index = src + (i * graph.nnodes);
       if (graph.node_data[src] == cuda_nodes_to_consider[i]) {
@@ -133,6 +136,25 @@ void InitializeIteration_allNodes_cuda(
   cudaMalloc((void**) &cuda_nodes_to_consider, ctx->vectorSize*sizeof(uint64_t));
   cudaMemcpy(cuda_nodes_to_consider, local_nodes_to_consider, ctx->vectorSize*sizeof(uint64_t), cudaMemcpyHostToDevice);
  
+
+  //std::cout << "\n\nWESTON DEBUG BEGIN\n\n";
+  //std::cout << cuda_nodes_to_consider << std::endl;
+  //std::cout << ctx->minDistances.data.gpu_wr_ptr() << std::endl;
+  //std::cout << ctx->shortPathCount.data.gpu_wr_ptr() << std::endl;
+  //std::cout << ctx->dependency.data.gpu_wr_ptr() << std::endl;
+  //std::cout << ctx->roundIndexToSend.data.gpu_wr_ptr() << std::endl;
+  //std::cout << ctx->mrbc_tree.data.gpu_wr_ptr() << std::endl;
+  //std::cout << "\n\nWESTON DEBUG END\n\n";
+
+  //        cuda_nodes_to_consider, " ",
+  //        local_infinity, " ",
+  //        ctx->vectorSize, " ",
+  //        ctx->minDistances.data.gpu_wr_ptr(), " ",
+  //        ctx->shortPathCount.data.gpu_wr_ptr(), " ",
+  //        ctx->dependency.data.gpu_wr_ptr(), " ",
+  //        ctx->roundIndexToSend.data.gpu_wr_ptr(), " ",
+  //        ctx->mrbc_tree.data.gpu_wr_ptr(), "\n");
+
   InitializeIteration_kernel <<<blocks, threads>>>(
           ctx->gg, 
           0, 
@@ -147,6 +169,8 @@ void InitializeIteration_allNodes_cuda(
           ctx->mrbc_tree.data.gpu_wr_ptr());
   cudaDeviceSynchronize();
   check_cuda_kernel;
+
+  cudaFree(cuda_nodes_to_consider);
 }
 
 
@@ -695,7 +719,7 @@ __global__ void BC_kernel(
 }
 
 
-void BC_cuda(
+void BC_masterNodes_cuda(
     struct CUDA_Context*  ctx,
     const uint64_t* local_nodes_to_consider)
 {
@@ -711,14 +735,16 @@ void BC_cuda(
   
   BC_kernel <<<blocks, threads>>>(
           ctx->gg, 
-          0, 
-          ctx->gg.nnodes, 
+          ctx->beginMaster, 
+          ctx->beginMaster + ctx->numOwned, 
           ctx->vectorSize,
           cuda_nodes_to_consider,
           ctx->dependency.data.gpu_wr_ptr(),
           ctx->bc.data.gpu_wr_ptr());
   cudaDeviceSynchronize();
   check_cuda_kernel;
+
+  cudaFree(cuda_nodes_to_consider);
 }
 
 
@@ -739,6 +765,6 @@ void Sanity_cuda(struct CUDA_Context* ctx);
 
 
 
-// TODO: WESTON: write cuda bitset class
+// TODO: WESTON: implement bitset reset method
 void bitset_dependency_reset_cuda(struct CUDA_Context* ctx);
 void bitset_minDistances_reset_cuda(struct CUDA_Context* ctx);

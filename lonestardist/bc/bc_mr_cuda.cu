@@ -66,14 +66,14 @@ void InitializeGraph_allNodes_cuda(struct CUDA_Context* ctx) {
 //         for (unsigned i = 0; i < numSourcesPerRound; i++) {
 //           // min distance and short path count setup
 //           if (nodesToConsider[i] == graph.getGID(curNode)) { // source node
-//             cur_data.sourceData[i].minDistance = 0;
+//             cur_data.sourceData[i].minDistances = 0;
 //             cur_data.sourceData[i].shortPathCount = 1;
-//             cur_data.sourceData[i].dependencyValue = 0.0;
+//             cur_data.sourceData[i].dependency = 0.0;
 //             cur_data.dTree.setDistance(i, 0);
 //           } else { // non-source node
-//             cur_data.sourceData[i].minDistance = infinity;
+//             cur_data.sourceData[i].minDistances = infinity;
 //             cur_data.sourceData[i].shortPathCount = 0;
-//             cur_data.sourceData[i].dependencyValue = 0.0;
+//             cur_data.sourceData[i].dependency = 0.0;
 //           }
 //         }
 //       },
@@ -87,9 +87,9 @@ __global__ void InitializeIteration_kernel(
         uint64_t *  cuda_nodes_to_consider,
         uint32_t local_infinity,
         unsigned int numSourcesPerRound,
-        uint32_t * p_minDistance,
+        uint32_t * p_minDistances,
         double   * p_shortPathCount,
-        float    * p_dependencyValue,
+        float    * p_dependency,
         uint32_t * p_roundIndexToSend,
         MRBCTree_cuda * p_mrbc_tree)
  {
@@ -105,14 +105,14 @@ __global__ void InitializeIteration_kernel(
     for (index_type i = 0; i < numSourcesPerRound; i++) {
       unsigned int index = src + (i * graph.nnodes);
       if (graph.node_data[src] == cuda_nodes_to_consider[i]) {
-        p_minDistance[index] = 0;
+        p_minDistances[index] = 0;
         p_shortPathCount[index] = 1;
-        p_dependencyValue[index] = 0.0;
+        p_dependency[index] = 0.0;
         p_mrbc_tree[src].setDistance(0, 0);
        } else {
-         p_minDistance[index] = local_infinity;
+         p_minDistances[index] = local_infinity;
          p_shortPathCount[index] = 0;
-         p_dependencyValue[index] = 0.0;
+         p_dependency[index] = 0.0;
        }
      }
   }
@@ -140,9 +140,9 @@ void InitializeIteration_allNodes_cuda(
           cuda_nodes_to_consider,
           local_infinity,
           ctx->vectorSize,
-          ctx->minDistance.data.gpu_wr_ptr(),
+          ctx->minDistances.data.gpu_wr_ptr(),
           ctx->shortPathCount.data.gpu_wr_ptr(),
-          ctx->dependencyValue.data.gpu_wr_ptr(),
+          ctx->dependency.data.gpu_wr_ptr(),
           ctx->roundIndexToSend.data.gpu_wr_ptr(),
           ctx->mrbc_tree.data.gpu_wr_ptr());
   cudaDeviceSynchronize();
@@ -159,8 +159,8 @@ void InitializeIteration_allNodes_cuda(
 //         cur_data.roundIndexToSend = cur_data.dTree.getIndexToSend(roundNumber);
 // 
 //         if (cur_data.roundIndexToSend != infinity) {
-//           if (cur_data.sourceData[cur_data.roundIndexToSend].minDistance != 0) {
-//             bitset_minDistances.set(curNode);
+//           if (cur_data.sourceData[cur_data.roundIndexToSend].minDistances != 0) {
+//             bitset_minDistancess.set(curNode);
 //           }
 //           dga += 1;
 //         } else if (cur_data.dTree.moreWork()) {
@@ -174,10 +174,10 @@ __global__ void FindMessageToSync_kernel(
         unsigned int __end, 
         uint32_t roundNumber,
         uint32_t local_infinity,
-        uint32_t * p_minDistance,
+        uint32_t * p_minDistances,
         uint32_t * p_roundIndexToSend,
         MRBCTree_cuda * p_mrbc_tree,
-        DynamicBitset& bitset_minDistance,
+        DynamicBitset& bitset_minDistances,
         HGAccumulator<uint32_t> dga)
 {
     unsigned tid = TID_1D;
@@ -195,8 +195,8 @@ __global__ void FindMessageToSync_kernel(
         p_roundIndexToSend[src] = p_mrbc_tree[src].getIndexToSend(roundNumber);
 
         if (p_roundIndexToSend[src] != local_infinity) {
-            if (p_minDistance[p_roundIndexToSend[src] * graph.nnodes + src] != 0) {
-              bitset_minDistance.set(p_roundIndexToSend[src] * graph.nnodes + src);
+            if (p_minDistances[p_roundIndexToSend[src] * graph.nnodes + src] != 0) {
+              bitset_minDistances.set(p_roundIndexToSend[src] * graph.nnodes + src);
             }
             dga.reduce(1);
         } else if ( p_mrbc_tree[src].moreWork() ) {
@@ -230,10 +230,10 @@ void FindMessageToSync_cuda(
           ctx->gg.nnodes, 
           roundNumber,
           local_infinity,
-          ctx->minDistance.data.gpu_rd_ptr(),
+          ctx->minDistances.data.gpu_rd_ptr(),
           ctx->roundIndexToSend.data.gpu_wr_ptr(),
           ctx->mrbc_tree.data.gpu_wr_ptr(),
-          *(ctx->minDistance.is_updated.gpu_wr_ptr()), 
+          *(ctx->minDistances.is_updated.gpu_wr_ptr()), 
           _dga);
 
   cudaDeviceSynchronize();
@@ -307,9 +307,9 @@ __global__ void SendAPSPMessages_kernel(
        unsigned int __begin, 
        unsigned int __end, 
        uint32_t local_infinity,
-       uint32_t * p_minDistance,
+       uint32_t * p_minDistances,
        double   * p_shortPathCount,
-       float    * p_dependencyValue,
+       float    * p_dependency,
        uint32_t * p_roundIndexToSend,
        MRBCTree_cuda * p_mrbc_tree,
        HGAccumulator<uint32_t> dga)
@@ -338,13 +338,13 @@ __global__ void SendAPSPMessages_kernel(
         if (indexToSend != local_infinity) {
             uint32_t src_index = (indexToSend * graph.nnodes) + src;
             uint32_t dst_index = (indexToSend * graph.nnodes) + dst;
-            uint32_t distValue = p_minDistance[src_index];
+            uint32_t distValue = p_minDistances[src_index];
             uint32_t newValue  = distValue + 1;
-            // Update minDistance vector
-            uint32_t oldValue = p_minDistance[dst_index];
+            // Update minDistances vector
+            uint32_t oldValue = p_minDistances[dst_index];
 
             if (oldValue > newValue) {
-                p_minDistance[dst_index] = newValue;
+                p_minDistances[dst_index] = newValue;
                 p_mrbc_tree[dst].setDistance(indexToSend, oldValue, newValue);
                 p_shortPathCount[dst_index] = p_shortPathCount[src_index];
             } else if (oldValue == newValue) {
@@ -381,9 +381,9 @@ void SendAPSPMessages_cuda(
           0, 
           ctx->gg.nnodes, 
           local_infinity,
-          ctx->minDistance.data.gpu_wr_ptr(),
+          ctx->minDistances.data.gpu_wr_ptr(),
           ctx->shortPathCount.data.gpu_wr_ptr(),
-          ctx->dependencyValue.data.gpu_wr_ptr(),
+          ctx->dependency.data.gpu_wr_ptr(),
           ctx->roundIndexToSend.data.gpu_wr_ptr(),
           ctx->mrbc_tree.data.gpu_wr_ptr(),
           _dga);
@@ -462,7 +462,7 @@ void RoundUpdate_cuda(
 //
 //           if (dst_data.roundIndexToSend != infinity) {
 //             // only comm if not redundant 0
-//             if (dst_data.sourceData[dst_data.roundIndexToSend].dependencyValue != 0) {
+//             if (dst_data.sourceData[dst_data.roundIndexToSend].dependency != 0) {
 //               bitset_dependency.set(dst);
 //             }
 //           }
@@ -480,10 +480,10 @@ __global__ void BackFindMessageToSend_kernel(
        uint32_t local_infinity,
        uint32_t roundNumber,
        uint32_t lastRoundNumber,
-       float    * p_dependencyValue,
+       float    * p_dependency,
        uint32_t * p_roundIndexToSend,
        MRBCTree_cuda * p_mrbc_tree,
-       DynamicBitset& bitset_dependencyValue)
+       DynamicBitset& bitset_dependency)
 {
     unsigned tid = TID_1D;
     unsigned nthreads = TOTAL_THREADS_1D;
@@ -500,8 +500,8 @@ __global__ void BackFindMessageToSend_kernel(
 
         if (p_roundIndexToSend[src] != local_infinity) {
              uint32_t index = p_roundIndexToSend[src] * graph.nnodes + src;
-             if (p_dependencyValue[index] != 0) {
-               bitset_dependencyValue.set(index);
+             if (p_dependency[index] != 0) {
+               bitset_dependency.set(index);
              }
         }
       }
@@ -528,10 +528,10 @@ void BackFindMessageToSend_cuda(
           local_infinity,
           roundNumber,
           lastRoundNumber,
-          ctx->dependencyValue.data.gpu_wr_ptr(),
+          ctx->dependency.data.gpu_wr_ptr(),
           ctx->roundIndexToSend.data.gpu_wr_ptr(),
           ctx->mrbc_tree.data.gpu_wr_ptr(),
-          *(ctx->dependencyValue.is_updated.gpu_wr_ptr()));
+          *(ctx->dependency.is_updated.gpu_wr_ptr()));
 
   cudaDeviceSynchronize();
   check_cuda_kernel;
@@ -543,21 +543,21 @@ void BackFindMessageToSend_cuda(
 //   unsigned i         = dst_data.roundIndexToSend;
 // 
 //   if (i != infinity) {
-//     uint32_t myDistance = dst_data.sourceData[i].minDistance;
+//     uint32_t myDistance = dst_data.sourceData[i].minDistances;
 // 
 //     // calculate final dependency value
-//     dst_data.sourceData[i].dependencyValue =
-//       dst_data.sourceData[i].dependencyValue *
+//     dst_data.sourceData[i].dependency =
+//       dst_data.sourceData[i].dependency *
 //         dst_data.sourceData[i].shortPathCount;
 // 
 //     // get the value to add to predecessors
-//     float toAdd = ((float)1 + dst_data.sourceData[i].dependencyValue) /
+//     float toAdd = ((float)1 + dst_data.sourceData[i].dependency) /
 //                   dst_data.sourceData[i].shortPathCount;
 // 
 //     for (auto inEdge : graph.edges(dst)) {
 //       GNode src      = graph.getEdgeDst(inEdge);
 //       auto& src_data = graph.getData(src);
-//       uint32_t sourceDistance = src_data.sourceData[i].minDistance;
+//       uint32_t sourceDistance = src_data.sourceData[i].minDistances;
 // 
 //       // source nodes of this batch (i.e. distance 0) can be safely
 //       // ignored
@@ -565,7 +565,7 @@ void BackFindMessageToSend_cuda(
 //         // determine if this source is a predecessor
 //         if (myDistance == (sourceDistance + 1)) {
 //           // add to dependency of predecessor using our finalized one
-//           galois::atomicAdd(src_data.sourceData[i].dependencyValue, toAdd);
+//           galois::atomicAdd(src_data.sourceData[i].dependency, toAdd);
 //         }
 //       }   
 //     }   
@@ -578,9 +578,9 @@ __global__ void BackProp_kernel(
        unsigned int __begin, 
        unsigned int __end, 
        uint32_t local_infinity,
-       uint32_t * p_minDistance,
+       uint32_t * p_minDistances,
        double   * p_shortPathCount,
-       float    * p_dependencyValue,
+       float    * p_dependency,
        uint32_t * p_roundIndexToSend,
        MRBCTree_cuda * p_mrbc_tree)
 {
@@ -596,13 +596,13 @@ __global__ void BackProp_kernel(
       unsigned i = p_roundIndexToSend[dst];
 
       if (i != local_infinity) {
-        uint32_t myDistance = p_minDistance[dst + (i * graph.nnodes)];
+        uint32_t myDistance = p_minDistances[dst + (i * graph.nnodes)];
 
-        p_dependencyValue[dst + (i * graph.nnodes)] = 
-          p_dependencyValue[dst + (i * graph.nnodes)] 
+        p_dependency[dst + (i * graph.nnodes)] = 
+          p_dependency[dst + (i * graph.nnodes)] 
             * p_shortPathCount[dst + (i * graph.nnodes)];
 
-        float toAdd = ((float)1 + p_dependencyValue[dst + (i * graph.nnodes)]) /
+        float toAdd = ((float)1 + p_dependency[dst + (i * graph.nnodes)]) /
           p_shortPathCount[dst + (i * graph.nnodes)];
 
 
@@ -613,11 +613,11 @@ __global__ void BackProp_kernel(
         {   
           
           index_type src = graph.getAbsDestination(current_edge);
-          uint32_t sourceDistance = p_minDistance[src + (i * graph.nnodes)];
+          uint32_t sourceDistance = p_minDistances[src + (i * graph.nnodes)];
 
           if (sourceDistance != 0) {
             if (myDistance == (sourceDistance + 1)) {
-              atomicAdd(&p_dependencyValue[src + (i * graph.nnodes)], toAdd);
+              atomicAdd(&p_dependency[src + (i * graph.nnodes)], toAdd);
             }
           }
 
@@ -643,9 +643,9 @@ void BackProp_cuda(
           0, 
           ctx->gg.nnodes, 
           local_infinity,
-          ctx->minDistance.data.gpu_wr_ptr(),
+          ctx->minDistances.data.gpu_wr_ptr(),
           ctx->shortPathCount.data.gpu_wr_ptr(),
-          ctx->dependencyValue.data.gpu_wr_ptr(),
+          ctx->dependency.data.gpu_wr_ptr(),
           ctx->roundIndexToSend.data.gpu_wr_ptr(),
           ctx->mrbc_tree.data.gpu_wr_ptr());
 
@@ -660,7 +660,7 @@ void BackProp_cuda(
 //         for (unsigned i = 0; i < numSourcesPerRound; i++) {
 //           // exclude sources themselves from BC calculation
 //           if (graph.getGID(node) != nodesToConsider[i]) {
-//             cur_data.bc += cur_data.sourceData[i].dependencyValue;
+//             cur_data.bc += cur_data.sourceData[i].dependency;
 //           }
 //         }
 //       },
@@ -673,7 +673,7 @@ __global__ void BC_kernel(
        unsigned int __end, 
        unsigned int numSourcesPerRound,
        uint64_t *  cuda_nodes_to_consider,
-       float    * p_dependencyValue,
+       float    * p_dependency,
        float* p_bc)
 {
     unsigned tid = TID_1D;
@@ -687,7 +687,7 @@ __global__ void BC_kernel(
     {
       for (unsigned i = 0; i < numSourcesPerRound; i++) {
         if (graph.node_data[src] != cuda_nodes_to_consider[i]) {
-          p_bc[src] += p_dependencyValue[src + (i * graph.nnodes)];
+          p_bc[src] += p_dependency[src + (i * graph.nnodes)];
         }
       }
     }
@@ -715,7 +715,7 @@ void BC_cuda(
           ctx->gg.nnodes, 
           ctx->vectorSize,
           cuda_nodes_to_consider,
-          ctx->dependencyValue.data.gpu_wr_ptr(),
+          ctx->dependency.data.gpu_wr_ptr(),
           ctx->bc.data.gpu_wr_ptr());
   cudaDeviceSynchronize();
   check_cuda_kernel;

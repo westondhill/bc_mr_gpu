@@ -371,8 +371,8 @@ uint32_t APSP(Graph& graph, galois::DGAccumulator<uint32_t>& dga) {
     // Template para's are struct names
     // TODO: WESTON: write sync for hash of bitsets
     //               ucomment this once mrbc_sync.hh gets uncommented
-    //syncSubstrate->sync<writeAny, readAny, APSPReduce,
-    //           Bitset_minDistances>(std::string("APSP"));
+    syncSubstrate->sync<writeAny, readAny, APSPReduce,
+               Bitset_minDistances>(std::string("APSP"));
 
     // confirm message to send after sync potentially changes what you were
     // planning on sending
@@ -519,9 +519,9 @@ void BackProp(Graph& graph, const uint32_t lastRoundNumber) {
     // write destination in this case being the source in the actual graph
     // since we're using the tranpose graph
     // TODO: WESTON: write sync for hash of bitsets
-    //syncSubstrate->sync<writeDestination, readSource, DependencyReduce,
-    //           Bitset_dependency>(
-    //    std::string("DependencySync"));
+    syncSubstrate->sync<writeDestination, readSource, DependencyReduce,
+               Bitset_dependency>(
+        std::string("DependencySync"));
 
     // TODO: WESTON: uncomment backprop once implemented
 /*

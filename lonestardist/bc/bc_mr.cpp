@@ -254,17 +254,17 @@ void FindMessageToSync(Graph& graph, const uint32_t roundNumber,
 void ConfirmMessageToSend(Graph& graph, const uint32_t roundNumber,
                           galois::DGAccumulator<uint32_t>& dga) {
   const auto& allNodes = graph.allNodesRange();
-/*
 #ifdef __GALOIS_HET_CUDA__
   if (personality == GPU_CUDA) {
+    galois::gPrint("In ConfirmMessageToSend\n");
     std::string impl_str("ConfirmMessageToSend");
     galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
     StatTimer_cuda.start();
-    // ConfirmMessageToSend_cuda();
+    ConfirmMessageToSend_cuda(roundNumber, infinity, cuda_ctx);
     StatTimer_cuda.stop();
+    galois::gPrint("ConfirmMessageToSend kernel done\n");
   } else if (personality == CPU)
 #endif
-*/
   galois::do_all(
       galois::iterate(allNodes.begin(), allNodes.end()),
       [&](GNode curNode) {
@@ -324,17 +324,17 @@ void SendAPSPMessagesOp(GNode dst, Graph& graph, galois::DGAccumulator<uint32_t>
 
 void SendAPSPMessages(Graph& graph, galois::DGAccumulator<uint32_t>& dga) {
   const auto& allNodesWithEdges = graph.allNodesWithEdgesRange();
-/*
 #ifdef __GALOIS_HET_CUDA__
   if (personality == GPU_CUDA) {
     std::string impl_str("SendAPSPMessages");
     galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
     StatTimer_cuda.start();
-    // SendAPSPMessages_cuda();
+    uint32_t retval = 0;
+    SendAPSPMessages_cuda(infinity, retval, cuda_ctx);
+    dga += retval;
     StatTimer_cuda.stop();
   } else if (personality == CPU)
 #endif
-*/
   galois::do_all(
       galois::iterate(allNodesWithEdges),
       [&](GNode dst) {

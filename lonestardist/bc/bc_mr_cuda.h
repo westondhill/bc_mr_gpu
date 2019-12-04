@@ -31,7 +31,7 @@ void ConfirmMessageToSend_cuda(
     uint32_t roundNumber,
     const uint32_t & local_infinity, 
     struct CUDA_Context*  ctx);
-void SendAPAPMessages_cuda(
+void SendAPSPMessages_cuda(
     const uint32_t & local_infinity, 
     uint32_t &dga,
     struct CUDA_Context*  ctx);

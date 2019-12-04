@@ -1,4 +1,3 @@
-/*  -*- mode: c++ -*-  */
 #include "gg.h"
 #include "ggcuda.h"
 #include "cub/cub.cuh"
@@ -14,8 +13,6 @@ void kernel_sizing(CSRGraph &, dim3 &, dim3 &);
 #include "bc_mr_cuda.cuh"
 
 #include "mrbc_tree_cuda.cuh"
-
-// TODO: WESTON: remove bcData variables
 
 //   galois::do_all(
 //       galois::iterate(allNodes.begin(), allNodes.end()),
@@ -198,7 +195,7 @@ __global__ void FindMessageToSync_kernel(
         p_roundIndexToSend[src] = p_mrbc_tree[src].getIndexToSend(roundNumber);
 
         if (p_roundIndexToSend[src] != local_infinity) {
-            if (p_minDistance[p_roundIndexToSend[src] * __end + src] != 0) {
+            if (p_minDistance[p_roundIndexToSend[src] * graph.nnodes + src] != 0) {
               bitset_minDistance.set(p_roundIndexToSend[src] * graph.nnodes + src);
             }
             dga.reduce(1);
@@ -263,12 +260,9 @@ __global__ void ConfirmMessageToSend_kernel(
         unsigned int __end, 
         uint32_t roundNumber,
         uint32_t local_infinity,
-        uint32_t * p_bcData_minDistance,
-        double   * p_bcData_shortPathCount,
-        float    * p_bcData_dependencyValue,
-        uint32_t * p_roundIndexToSend,
-        MRBCTree_cuda * p_mrbc_tree)
- {
+        MRBCTree_cuda * p_mrbc_tree,
+        uint32_t * p_roundIndexToSend)
+{
    unsigned tid = TID_1D;
    unsigned nthreads = TOTAL_THREADS_1D;
 
@@ -300,12 +294,8 @@ void ConfirmMessageToSend_cuda(
           ctx->gg.nnodes, 
           roundNumber,
           local_infinity,
-          ctx->bcData_minDistance.data.gpu_wr_ptr(),
-          ctx->bcData_shortPathCount.data.gpu_wr_ptr(),
-          ctx->bcData_dependencyValue.data.gpu_wr_ptr(),
-          ctx->roundIndexToSend.data.gpu_wr_ptr(),
-          ctx->mrbc_tree.data.gpu_wr_ptr());
-
+          ctx->mrbc_tree.data.gpu_wr_ptr(),
+          ctx->roundIndexToSend.data.gpu_wr_ptr());
   cudaDeviceSynchronize();
   check_cuda_kernel;
 }
@@ -317,9 +307,9 @@ __global__ void SendAPSPMessages_kernel(
        unsigned int __begin, 
        unsigned int __end, 
        uint32_t local_infinity,
-       uint32_t * p_bcData_minDistance,
-       double   * p_bcData_shortPathCount,
-       float    * p_bcData_dependencyValue,
+       uint32_t * p_minDistance,
+       double   * p_shortPathCount,
+       float    * p_dependencyValue,
        uint32_t * p_roundIndexToSend,
        MRBCTree_cuda * p_mrbc_tree,
        HGAccumulator<uint32_t> dga)
@@ -346,19 +336,20 @@ __global__ void SendAPSPMessages_kernel(
         uint32_t indexToSend = p_roundIndexToSend[src];
        
         if (indexToSend != local_infinity) {
-            uint32_t distValue = p_bcData_minDistance[src];
+            uint32_t src_index = (indexToSend * graph.nnodes) + src;
+            uint32_t dst_index = (indexToSend * graph.nnodes) + dst;
+            uint32_t distValue = p_minDistance[src_index];
             uint32_t newValue  = distValue + 1;
             // Update minDistance vector
-            uint32_t oldValue = p_bcData_minDistance[dst];
+            uint32_t oldValue = p_minDistance[dst_index];
 
             if (oldValue > newValue) {
-                p_bcData_minDistance[dst] = newValue;
+                p_minDistance[dst_index] = newValue;
                 p_mrbc_tree[dst].setDistance(indexToSend, oldValue, newValue);
-                p_bcData_shortPathCount[dst] = p_bcData_shortPathCount[src];
+                p_shortPathCount[dst_index] = p_shortPathCount[src_index];
             } else if (oldValue == newValue) {
-                // assert (p_bcData_shortPathCount[dst]
                 // add to short path
-                p_bcData_shortPathCount[dst] += p_bcData_shortPathCount[src];
+                p_shortPathCount[dst_index] += p_shortPathCount[src_index];
             }
 
             // dga += 1
@@ -370,11 +361,7 @@ __global__ void SendAPSPMessages_kernel(
 
 }
 
-
-
-
-
-void SendAPAPMessages_cuda(
+void SendAPSPMessages_cuda(
     const uint32_t & local_infinity, 
     uint32_t &dga,
     struct CUDA_Context*  ctx)
@@ -394,10 +381,9 @@ void SendAPAPMessages_cuda(
           0, 
           ctx->gg.nnodes, 
           local_infinity,
-          ctx->bcData_minDistance.data.gpu_wr_ptr(),
-          ctx->bcData_shortPathCount.data.gpu_wr_ptr(),
-          ctx->bcData_dependencyValue.data.gpu_wr_ptr(),
-          // TODO: WESTON: hash map info?
+          ctx->minDistance.data.gpu_wr_ptr(),
+          ctx->shortPathCount.data.gpu_wr_ptr(),
+          ctx->dependencyValue.data.gpu_wr_ptr(),
           ctx->roundIndexToSend.data.gpu_wr_ptr(),
           ctx->mrbc_tree.data.gpu_wr_ptr(),
           _dga);
@@ -424,11 +410,6 @@ __global__ void RoundUpdate_kernel(
        CSRGraph graph, 
        unsigned int __begin, 
        unsigned int __end, 
-       uint32_t local_infinity,
-       uint32_t * p_bcData_minDistance,
-       double   * p_bcData_shortPathCount,
-       float    * p_bcData_dependencyValue,
-       uint32_t * p_roundIndexToSend,
        MRBCTree_cuda * p_mrbc_tree)
 {
     unsigned tid = TID_1D;
@@ -459,12 +440,6 @@ void RoundUpdate_cuda(
           ctx->gg, 
           0, 
           ctx->gg.nnodes, 
-          local_infinity,
-          ctx->bcData_minDistance.data.gpu_wr_ptr(),
-          ctx->bcData_shortPathCount.data.gpu_wr_ptr(),
-          ctx->bcData_dependencyValue.data.gpu_wr_ptr(),
-          // TODO: WESTON: hash map info?
-          ctx->roundIndexToSend.data.gpu_wr_ptr(),
           ctx->mrbc_tree.data.gpu_wr_ptr());
 
   cudaDeviceSynchronize();
@@ -505,11 +480,10 @@ __global__ void BackFindMessageToSend_kernel(
        uint32_t local_infinity,
        uint32_t roundNumber,
        uint32_t lastRoundNumber,
-       uint32_t * p_bcData_minDistance,
-       double   * p_bcData_shortPathCount,
-       float    * p_bcData_dependencyValue,
+       float    * p_dependencyValue,
        uint32_t * p_roundIndexToSend,
-       MRBCTree_cuda * p_mrbc_tree)
+       MRBCTree_cuda * p_mrbc_tree,
+       DynamicBitset& bitset_dependencyValue)
 {
     unsigned tid = TID_1D;
     unsigned nthreads = TOTAL_THREADS_1D;
@@ -525,10 +499,10 @@ __global__ void BackFindMessageToSend_kernel(
           p_mrbc_tree[src].backGetIndexToSend(roundNumber, lastRoundNumber);
 
         if (p_roundIndexToSend[src] != local_infinity) {
-             // TODO: WESTON: update this with bitset stuff ELENA?
-             //if (dst_data.sourceData[dst_data.roundIndexToSend].dependencyValue != 0) {
-             //  bitset_dependency.set(dst);
-             //}
+             uint32_t index = p_roundIndexToSend[src] * graph.nnodes + src;
+             if (p_dependencyValue[index] != 0) {
+               bitset_dependencyValue.set(index);
+             }
         }
       }
     }
@@ -554,12 +528,10 @@ void BackFindMessageToSend_cuda(
           local_infinity,
           roundNumber,
           lastRoundNumber,
-          ctx->bcData_minDistance.data.gpu_wr_ptr(),
-          ctx->bcData_shortPathCount.data.gpu_wr_ptr(),
-          ctx->bcData_dependencyValue.data.gpu_wr_ptr(),
-          // TODO: WESTON: hash map info?
+          ctx->dependencyValue.data.gpu_wr_ptr(),
           ctx->roundIndexToSend.data.gpu_wr_ptr(),
-          ctx->mrbc_tree.data.gpu_wr_ptr());
+          ctx->mrbc_tree.data.gpu_wr_ptr(),
+          *(ctx->dependencyValue.is_updated.gpu_wr_ptr()));
 
   cudaDeviceSynchronize();
   check_cuda_kernel;
@@ -695,18 +667,13 @@ void BackProp_cuda(
 //       galois::loopname(syncSubstrate->get_run_identifier("BC").c_str()),
 //       galois::no_stats());
 
-
-
 __global__ void BC_kernel(
        CSRGraph graph, 
        unsigned int __begin, 
        unsigned int __end, 
        unsigned int numSourcesPerRound,
        uint64_t *  cuda_nodes_to_consider,
-       uint32_t * p_minDistance,
-       double   * p_shortPathCount,
        float    * p_dependencyValue,
-       uint32_t * p_roundIndexToSend,
        float* p_bc)
 {
     unsigned tid = TID_1D;
@@ -748,12 +715,8 @@ void BC_cuda(
           ctx->gg.nnodes, 
           ctx->vectorSize,
           cuda_nodes_to_consider,
-          ctx->minDistance.data.gpu_wr_ptr(),
-          ctx->shortPathCount.data.gpu_wr_ptr(),
           ctx->dependencyValue.data.gpu_wr_ptr(),
-          ctx->roundIndexToSend.data.gpu_wr_ptr(),
           ctx->bc.data.gpu_wr_ptr());
-
   cudaDeviceSynchronize();
   check_cuda_kernel;
 }

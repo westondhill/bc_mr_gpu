@@ -20,12 +20,6 @@ unsigned vectorSize;
 //};
 
 struct CUDA_Context : public CUDA_Context_Common {
-  // assumes one source per round
-  // BCData struct
-  struct CUDA_Context_Field<uint32_t> bcData_minDistance;
-  struct CUDA_Context_Field<double> bcData_shortPathCount;
-  struct CUDA_Context_Field<float> bcData_dependencyValue;
-
   // replacement for MRBCTree
   // TODO: WESTON: CUDA_Context_Field of hashes
   //struct CUDA_Context_Field<gpu_hash_table<uint32_t, BitSet, SlabHashTypeT::ConcurrentMap>;

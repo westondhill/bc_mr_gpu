@@ -298,7 +298,6 @@ __global__ void ConfirmMessageToSend_kernel(
      if (p_roundIndexToSend[src] != local_infinity) {
        p_mrbc_tree[src].markSent(roundNumber);
      }
-
    }
  }
 
@@ -358,7 +357,7 @@ __global__ void SendAPSPMessages_kernel(
     {   
         index_type src = graph.getAbsDestination(current_edge);
         uint32_t indexToSend = p_roundIndexToSend[src];
-       
+
         if (indexToSend != local_infinity) {
             uint32_t src_index = (indexToSend * graph.nnodes) + src;
             uint32_t dst_index = (indexToSend * graph.nnodes) + dst;

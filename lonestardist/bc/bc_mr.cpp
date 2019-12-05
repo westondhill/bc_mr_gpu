@@ -216,7 +216,8 @@ void FindMessageToSync(Graph& graph, const uint32_t roundNumber,
     galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
     StatTimer_cuda.start();
     uint32_t retval = 0;
-    FindMessageToSync_cuda(roundNumber, retval, retval, cuda_ctx);
+    FindMessageToSync_cuda(roundNumber, infinity, retval, cuda_ctx);
+    //galois::gPrint("retval = ", retval, "\n");
     dga += retval;
     StatTimer_cuda.stop();
     galois::gPrint("Finished FindMessageToSync kernel\n");
@@ -332,6 +333,7 @@ void SendAPSPMessages(Graph& graph, galois::DGAccumulator<uint32_t>& dga) {
     StatTimer_cuda.start();
     uint32_t retval = 0;
     SendAPSPMessages_cuda(infinity, retval, cuda_ctx);
+    //galois::gPrint("retval = ", retval, "\n");
     dga += retval;
     StatTimer_cuda.stop();
     galois::gPrint("Finished SendAPSPMessages\n");
@@ -830,15 +832,13 @@ int main(int argc, char** argv) {
       offset = 0;
       macroRound = 0;
       numSourcesPerRound = origNumRoundSources;
-/*
+
 #ifdef __GALOIS_HET_CUDA__
-      // TODO: WESTON: write reset for hash of bitsets
       if (personality == GPU_CUDA) {
-        //bitset_dependency_reset_cuda(cuda_ctx);
-        //bitset_minDistances_reset_cuda(cuda_ctx);
+        bitset_dependency_reset_cuda(cuda_ctx);
+        bitset_minDistances_reset_cuda(cuda_ctx);
       } else if (personality == CPU)
 #endif
-*/
       {
         bitset_dependency.reset();
         bitset_minDistances.reset();

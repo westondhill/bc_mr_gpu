@@ -214,13 +214,19 @@ public:
     }
   }
 
-  __device__ void device_conditional_alloc(size_t nbits) {
-    if (!bit_vector) {
-      num_bits_capacity = nbits;
-      num_bits = nbits;
-      bit_vector = (uint64_t *) malloc(vec_size() * sizeof(uint64_t));
-    }
+  __device__ void device_alloc(size_t nbits) {
+    num_bits_capacity = nbits;
+    num_bits = nbits;
+    bit_vector = (uint64_t *) malloc(vec_size() * sizeof(uint64_t));
     reset();
+  }
+
+  __device__ void device_dealloc() {
+    if (bit_vector) {
+      free(bit_vector);
+    }
+    num_bits_capacity = 0;
+    num_bits = 0;
   }
 
   // @DynamicBitSet

@@ -57,7 +57,10 @@ class MRBCTree_cuda {
   //! Current iterator for reverse map
   size_t curKey;
   //! End key for reverse map iterator
-  size_t endCurKey;
+  //size_t endCurKey;
+
+  // "not a position"
+  static const size_t npos = infinity;
 
 public:
 /*** InitializeIteration *****************************************************/
@@ -70,9 +73,14 @@ public:
 
     if (dist_vector) {
       free(dist_vector);
+      dist_vector = 0;
     }
     if (bitset_vector) {
+      for (int i = 0; i < size; i++) {
+        bitset_vector[i].device_dealloc();
+      }
       free(bitset_vector);
+      bitset_vector = 0;
     }
 
     size = 0;
@@ -114,7 +122,7 @@ public:
     }
 
     dist_vector[size] = dist;
-    bitset_vector[size].device_conditional_alloc(NUM_SOURCES_PER_ROUND);
+    bitset_vector[size].device_alloc(NUM_SOURCES_PER_ROUND);
     size++;
   }
 
@@ -203,6 +211,11 @@ public:
   __device__ void markSent(uint32_t roundNumber) {
     uint32_t distanceToCheck = roundNumber - numSentSources;
     size_t index = find_index(distanceToCheck);
+
+    if (index == size) {
+      push_back(distanceToCheck);
+    }
+
     BitSet& setToCheck = bitset_vector[index];
     setToCheck.forward_indicator();
 
@@ -235,7 +248,7 @@ public:
 
     // asset(distanceTree[newDistance].size() == numSourcesPerRound);
     size_t newDistanceIndex = find_index(newDistance);
-    if (newDistanceIndex > size) {
+    if (newDistanceIndex == size) {
       push_back(newDistance);
       newDistanceIndex = size-1;
     }
@@ -250,26 +263,30 @@ public:
    * iterators.
    */
   __device__ void prepForBackPhase() {
-    // sort by distance:
-    sort_by_dist();
 
-    curKey = size-1;
-    endCurKey = (uint64_t)(-1);
+    if (size > 0) {
+      // sort by distance:
+      sort_by_dist();
 
-    if (curKey != endCurKey) {
-      // find non-empty distance if first one happens to be empty
-      if (bitset_vector[curKey].none()) {
-        for (--curKey; curKey != endCurKey && bitset_vector[curKey].none(); --curKey);
+      curKey = size-1;
+
+      // find largest non-empty distance
+      while (bitset_vector[curKey].none() && curKey != npos) {
+        if (curKey == 0) {
+          curKey = npos;
+        } else {
+          curKey--;
+        }
       }
-    }
 
-    // setup if not empty
-    if (curKey != endCurKey) {
-      BitSet& curSet = bitset_vector[curKey];
-      #ifdef FLIP_MODE
-        curSet.flip();
-      #endif
-      curSet.backward_indicator();
+      // setup if not empty
+      if (curKey != npos) {
+        BitSet& curSet = bitset_vector[curKey];
+        #ifdef FLIP_MODE
+          curSet.flip();
+        #endif
+        curSet.backward_indicator();
+      }
     }
   }
 
@@ -283,7 +300,7 @@ public:
                               const uint32_t lastRound) {
     uint32_t indexToReturn = infinity;
 
-    while (curKey != endCurKey) {
+    while (curKey != npos) {
       uint32_t distance = dist_vector[curKey];
       if ((distance + numSentSources - 1) != (lastRound - roundNumber)){
         // round to send not reached yet; get out
@@ -303,10 +320,17 @@ public:
           break;
       } else {
         // set exhausted; go onto next set
-        for (--curKey; curKey != endCurKey && bitset_vector[curKey].none(); --curKey);
+        // find largest non-empty distance
+        while (bitset_vector[curKey].none() && curKey != npos) {
+          if (curKey == 0) {
+            curKey = npos;
+          } else {
+            curKey--;
+          }
+        }
 
         // if another set exists, set it up, else do nothing
-        if (curKey != endCurKey) {
+        if (curKey != npos) {
           BitSet& nextSet = bitset_vector[curKey];
           #ifdef FLIP_MODE
             nextSet.flip();
@@ -316,7 +340,7 @@ public:
       }
     }
 
-    if (curKey == endCurKey) {
+    if (curKey == npos) {
       //assert(numSentSources == 0);
       // TODO: WESTON: cuda assert?
     }

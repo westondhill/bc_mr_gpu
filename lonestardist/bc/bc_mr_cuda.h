@@ -51,7 +51,7 @@ void BackProp_cuda(
 void BC_masterNodes_cuda(
     struct CUDA_Context* ctx,
     const uint64_t* local_nodes_to_consider);
-void Sanity_cuda(struct CUDA_Context* ctx);
+void Sanity_cuda(float & DGAccumulator_sum, float & DGAAccumulator_max, float & DGAccumulator_min, struct CUDA_Context* ctx);
 void bitset_dependency_reset_cuda(struct CUDA_Context* ctx);
 void bitset_minDistances_reset_cuda(struct CUDA_Context* ctx);
 

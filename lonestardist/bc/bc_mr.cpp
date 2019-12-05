@@ -607,8 +607,11 @@ void Sanity(Graph& graph) {
     std::string impl_str("Sanity");
     galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
     StatTimer_cuda.start();
-    // TODO: WESTON: implement sanity check
-    // Sanity_cuda();
+    float sum, max, min;
+    Sanity_cuda(sum, max, min, cuda_ctx);
+    DGA_sum += sum;
+    DGA_max.update(max);
+    DGA_min.update(min);
     StatTimer_cuda.stop();
     galois::gDebug("Finished Sanity\n");
   } else if (personality == CPU)

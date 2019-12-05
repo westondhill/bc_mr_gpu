@@ -174,6 +174,9 @@ public:
     push_back(newDistance);
     bitset_vector[size-1].set_indicator(index);
 
+    //printf("** WESTON ** bitset: %x\n", bitset_vector[size-1].bit_vector[0]);
+    //printf("** WESTON ** indicator: %x\n", bitset_vector[size-1].getIndicator());
+
     numNonInfinity++;
   }
 
@@ -182,9 +185,9 @@ public:
   /**
    * Get the index that needs to be sent out this round given the round number.
    */
-  __device__ uint32_t getIndexToSend(uint32_t roundNumber) {
+  __device__ uint32_t getIndexToSend(uint32_t roundNumber, uint32_t local_infinity) {
     uint32_t distanceToCheck = roundNumber - numSentSources;
-    uint32_t indexToSend = infinity;
+    uint32_t indexToSend = local_infinity;
 
     size_t setIter = find_index(distanceToCheck);
     if (setIter != size) {
@@ -193,6 +196,7 @@ public:
       if (index != setToCheck.npos) {
         indexToSend = index;
       }
+      //printf("** WESTON ** index: %u\n", index);
     }
     return indexToSend;
   }
@@ -297,19 +301,20 @@ public:
    * back propagation phase.
    */
   __device__ uint32_t backGetIndexToSend(const uint32_t roundNumber, 
-                              const uint32_t lastRound) {
-    uint32_t indexToReturn = infinity;
+                              const uint32_t lastRound,
+                              uint32_t local_infinity) {
+    uint32_t indexToReturn = local_infinity;
 
     while (curKey != npos) {
       uint32_t distance = dist_vector[curKey];
       if ((distance + numSentSources - 1) != (lastRound - roundNumber)){
         // round to send not reached yet; get out
-        return infinity;
+        return local_infinity;
       }
 
       if (distance == 0) {
         zeroReached = true;
-        return infinity;
+        return local_infinity;
       }
 
       BitSet& curSet = bitset_vector[curKey];

@@ -38,7 +38,9 @@
  * @todo document this file
  */
 class DynamicBitset {
-protected:
+// TODO: WESTON: make protected
+//protected:
+  public:
   size_t num_bits_capacity;
   size_t num_bits;
   uint64_t* bit_vector;

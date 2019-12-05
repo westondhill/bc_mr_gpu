@@ -17,6 +17,10 @@
  * Documentation, or loss or inaccuracy of data of any kind.
  */
 
+#define DUMP_CHECKPOINTS
+
+#define MAX_CHECKPOINTS (100)
+
 #include "bc_mr_parameters.h"
 
 constexpr static const char* const REGION_NAME = "MRBC";
@@ -112,6 +116,59 @@ galois::graphs::GluonSubstrate<Graph>* syncSubstrate;
 // moved here for access to ShortPathType, NodeData, DynamicBitSets
 #include "mrbc_sync.hh"
 
+
+void DumpAlgorithmCheckpoint(Graph& graph) {
+#ifdef DUMP_CHECKPOINTS
+  static int checkpoint_num = 0;
+  const auto& allNodes = graph.allNodesRange();
+
+  if (checkpoint_num >= MAX_CHECKPOINTS) {
+    printf("%d CHECKPOINT ELIDED\n", checkpoint_num);
+  } else {
+    #ifdef __GALOIS_HET_CUDA__
+    if (personality == GPU_CUDA) {
+      DumpAlgorithmCheckpoint_cuda(cuda_ctx, checkpoint_num);
+    } else if (personality == CPU)
+    #endif
+    {
+      galois::do_all(
+        galois::iterate(allNodes.begin(), allNodes.end()),
+        [&](GNode curNode) {
+          NodeData& cur_data = graph.getData(curNode);
+
+          //gPrint(checkpoint_num, " CHECKPOINT",
+          //    " node: ", cur_data,
+          //    " roundIndexToSend: ", cur_data.roundIndexToSend,
+          //    " bc: ", cur_data.bc,
+          //    "\n");
+          //std::cout << checkpoint_num << " CHECKPOINT"
+          //    << " node: " << graph.getGID(curNode)
+          //    << " roundIndexToSend: " << cur_data.roundIndexToSend
+          //    << " bc: "<< cur_data.bc
+          //    << "\n";
+          printf("%d CHECKPOINT node: %09lu roundIndexToSend: %u bc: %g\n",
+              checkpoint_num,
+              graph.getGID(curNode),
+              cur_data.roundIndexToSend,
+              cur_data.bc);
+
+          for (unsigned i = 0; i < numSourcesPerRound; i++) {
+            printf("%d CHECKPOINT node: %09lu sourceIndex: %d minDistance: %u\n",
+                checkpoint_num,
+                graph.getGID(curNode),
+                i,
+                cur_data.sourceData[i].minDistance);
+          }
+        },
+        galois::loopname(syncSubstrate->get_run_identifier("DumpAlgorithmCheckpoint").c_str()),
+        galois::no_stats()); // Only stats the runtime by loopname
+    }
+  }
+
+  checkpoint_num++;
+#endif
+}
+
 /******************************************************************************/
 /* Functions for running the algorithm */
 /******************************************************************************/
@@ -149,6 +206,8 @@ void InitializeGraph(Graph& graph) {
       galois::no_stats()); // Only stats the runtime by loopname
   }
   galois::gDebug("Elena exiting InitializeGraph\n");
+
+  //DumpAlgorithmCheckpoint(graph);
 }
 
 /**
@@ -194,6 +253,7 @@ void InitializeIteration(Graph& graph,
       },
       galois::loopname(syncSubstrate->get_run_identifier("InitializeIteration").c_str()),
       galois::no_stats());
+  //DumpAlgorithmCheckpoint(graph);
 };
 
 /**
@@ -242,6 +302,7 @@ void FindMessageToSync(Graph& graph, const uint32_t roundNumber,
           syncSubstrate->get_run_identifier("FindMessageToSync").c_str()),
       galois::steal(),
       galois::no_stats());
+  DumpAlgorithmCheckpoint(graph);
 }
 
 /**
@@ -277,6 +338,7 @@ void ConfirmMessageToSend(Graph& graph, const uint32_t roundNumber,
       galois::loopname(
           syncSubstrate->get_run_identifier("ConfirmMessageToSend").c_str()),
       galois::no_stats());
+  //DumpAlgorithmCheckpoint(graph);
 }
 
 /**
@@ -348,6 +410,7 @@ void SendAPSPMessages(Graph& graph, galois::DGAccumulator<uint32_t>& dga) {
           syncSubstrate->get_run_identifier("SendAPSPMessages").c_str()),
       galois::steal(),
       galois::no_stats());
+  //DumpAlgorithmCheckpoint(graph);
 }
 
 /**
@@ -420,6 +483,7 @@ void RoundUpdate(Graph& graph) {
       galois::loopname(
           syncSubstrate->get_run_identifier("RoundUpdate").c_str()),
       galois::no_stats());
+  //DumpAlgorithmCheckpoint(graph);
 }
 
 /**
@@ -466,6 +530,7 @@ void BackFindMessageToSend(Graph& graph, const uint32_t roundNumber,
         syncSubstrate->get_run_identifier("BackFindMessageToSend").c_str()
       ),
       galois::no_stats());
+  //DumpAlgorithmCheckpoint(graph);
 }
 
 /**
@@ -548,6 +613,7 @@ void BackProp(Graph& graph, const uint32_t lastRoundNumber) {
         galois::no_stats());
 
     currentRound++;
+  //DumpAlgorithmCheckpoint(graph);
   }
 }
 
@@ -586,6 +652,7 @@ void BC(Graph& graph, const std::vector<uint64_t>& nodesToConsider) {
       },
       galois::loopname(syncSubstrate->get_run_identifier("BC").c_str()),
       galois::no_stats());
+  //DumpAlgorithmCheckpoint(graph);
 };
 
 /******************************************************************************/
@@ -637,6 +704,7 @@ void Sanity(Graph& graph) {
     galois::gPrint("Min BC is ", min_bc, "\n");
     galois::gPrint("BC sum is ", bc_sum, "\n");
   }
+  //DumpAlgorithmCheckpoint(graph);
 };
 
 /******************************************************************************/

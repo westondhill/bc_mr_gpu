@@ -52,8 +52,10 @@ void BC_masterNodes_cuda(
     struct CUDA_Context* ctx,
     const uint64_t* local_nodes_to_consider);
 void Sanity_cuda(float & DGAccumulator_sum, float & DGAAccumulator_max, float & DGAccumulator_min, struct CUDA_Context* ctx);
-void bitset_dependency_reset_cuda(struct CUDA_Context* ctx);
-void bitset_minDistances_reset_cuda(struct CUDA_Context* ctx);
+//void bitset_dependency_reset_cuda(struct CUDA_Context* ctx);
+//void bitset_minDistances_reset_cuda(struct CUDA_Context* ctx);
+
+void DumpAlgorithmCheckpoint_cuda( struct CUDA_Context* ctx, int checkpoint_num);
 
 
 void get_bitset_minDistances_cuda(struct CUDA_Context* ctx, uint64_t* bitset_compute);

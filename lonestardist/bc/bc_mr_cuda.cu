@@ -111,7 +111,7 @@ __global__ void InitializeIteration_kernel(
         p_minDistances[index] = 0;
         p_shortPathCount[index] = 1;
         p_dependency[index] = 0.0;
-        p_mrbc_tree[src].setDistance(0, 0);
+        p_mrbc_tree[src].setDistance(i, 0);
        } else {
          p_minDistances[index] = local_infinity;
          p_shortPathCount[index] = 0;
@@ -216,7 +216,7 @@ __global__ void FindMessageToSync_kernel(
     src_end = __end;
     for (index_type src = __begin + tid; src < src_end; src += nthreads)
     {
-        p_roundIndexToSend[src] = p_mrbc_tree[src].getIndexToSend(roundNumber);
+        p_roundIndexToSend[src] = p_mrbc_tree[src].getIndexToSend(roundNumber, local_infinity);
 
         if (p_roundIndexToSend[src] != local_infinity) {
             if (p_minDistances[p_roundIndexToSend[src] * graph.nnodes + src] != 0) {
@@ -519,7 +519,7 @@ __global__ void BackFindMessageToSend_kernel(
     {
       if (p_mrbc_tree[src].isZeroReached()) {
         p_roundIndexToSend[src] = 
-          p_mrbc_tree[src].backGetIndexToSend(roundNumber, lastRoundNumber);
+          p_mrbc_tree[src].backGetIndexToSend(roundNumber, lastRoundNumber, local_infinity);
 
         if (p_roundIndexToSend[src] != local_infinity) {
              uint32_t index = p_roundIndexToSend[src] * graph.nnodes + src;
@@ -814,5 +814,80 @@ void Sanity_cuda(float & DGAccumulator_sum, float & DGAccumulator_max, float & D
 
 
 // TODO: WESTON: implement bitset reset method
-void bitset_dependency_reset_cuda(struct CUDA_Context* ctx);
-void bitset_minDistances_reset_cuda(struct CUDA_Context* ctx);
+//void bitset_dependency_reset_cuda(struct CUDA_Context* ctx);
+//void bitset_minDistances_reset_cuda(struct CUDA_Context* ctx);
+
+
+
+__global__ void Dump_kernel(
+       CSRGraph graph, 
+       unsigned int __begin, 
+       unsigned int __end, 
+       int checkpoint_num,
+       int numSourcesPerRound,
+       uint32_t * p_roundIndexToSend,
+       uint32_t * p_minDistances,
+       float* p_bc)
+{
+    unsigned tid = TID_1D;
+    unsigned nthreads = TOTAL_THREADS_1D;
+
+    //const unsigned __kernel_tb_size = TB_SIZE;
+    index_type src_end;
+
+    src_end = __end;
+    uint64_t node_id = tid;
+    for (index_type src = __begin + tid; src < src_end; src += nthreads)
+    {
+      //for (unsigned i = 0; i < numSourcesPerRound; i++) {
+      //  if (graph.node_data[src] != cuda_nodes_to_consider[i]) {
+      //    p_bc[src] += p_dependency[src + (i * graph.nnodes)];
+      //  }
+      //}
+
+      printf("%d CHECKPOINT node: %09lu roundIndexToSend: %u bc: %g\n",
+          checkpoint_num,
+          //graph.node_data[src],
+          node_id,
+          p_roundIndexToSend[src],
+          p_bc[src]);
+
+      for (unsigned i = 0; i < numSourcesPerRound; i++) {
+
+        printf("%d CHECKPOINT node: %09lu sourceIndex: %d minDistance: %u\n",
+            checkpoint_num,
+            node_id,
+            i,
+            p_minDistances[src + (i * graph.nnodes)]);
+
+      }
+
+      node_id += nthreads;
+    }
+
+}
+
+
+void DumpAlgorithmCheckpoint_cuda(
+    struct CUDA_Context*  ctx,
+    int checkpoint_num)
+{
+  dim3 blocks;
+  dim3 threads;
+
+  kernel_sizing(blocks, threads);
+
+  // Make device vector for local_nodes_to_consider
+  
+  Dump_kernel <<<blocks, threads>>>(
+          ctx->gg, 
+          0, 
+          ctx->gg.nnodes, 
+          checkpoint_num,
+          ctx->vectorSize,
+          ctx->roundIndexToSend.data.gpu_wr_ptr(),
+          ctx->minDistances.data.gpu_wr_ptr(),
+          ctx->bc.data.gpu_wr_ptr());
+  cudaDeviceSynchronize();
+  check_cuda_kernel;
+}

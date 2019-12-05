@@ -217,6 +217,7 @@ public:
   __device__ void device_alloc(size_t nbits) {
     num_bits_capacity = nbits;
     num_bits = nbits;
+    indicator = npos;
     bit_vector = (uint64_t *) malloc(vec_size() * sizeof(uint64_t));
     reset();
   }

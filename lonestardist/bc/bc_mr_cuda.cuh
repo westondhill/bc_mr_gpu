@@ -28,8 +28,6 @@ struct CUDA_Context : public CUDA_Context_Common {
   //    galois::gstl::Vector<uint32_t> sourceData;
   struct CUDA_Context_Field<MRBCTree_cuda> mrbc_tree;
 
-
-
   uint32_t vectorSize;
   // struct CUDA_BCData* sourceData;
   

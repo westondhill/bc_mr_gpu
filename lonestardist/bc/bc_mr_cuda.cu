@@ -757,10 +757,59 @@ void BC_masterNodes_cuda(
 //                    DGA_sum += sdata.bc;
 //                  },
 //                  galois::no_stats(), galois::loopname("Sanity"));
+__global__
+void Sanity_kernel(CSRGraph graph, unsigned int __begin, unsigned int __end, float * p_bc, HGAccumulator<float> DGAccumulator_sum, HGReduceMax<float> DGAccumulator_max, HGReduceMin<float> DGAccumulator_min) {
+    unsigned tid = TID_1D;
+  unsigned nthreads = TOTAL_THREADS_1D;
+
+  //const unsigned __kernel_tb_size = TB_SIZE;
+  __shared__ cub::BlockReduce<float, TB_SIZE>::TempStorage DGAccumulator_sum_ts;
+  __shared__ cub::BlockReduce<float, TB_SIZE>::TempStorage DGAccumulator_max_ts;
+  __shared__ cub::BlockReduce<float, TB_SIZE>::TempStorage DGAccumulator_min_ts;
+  index_type src_end;
+  DGAccumulator_sum.thread_entry();
+  DGAccumulator_max.thread_entry();
+  DGAccumulator_min.thread_entry();
+  src_end = __end;
+  for (index_type src = __begin + tid; src < src_end; src += nthreads)
+  {
+    bool pop  = src < __end;
+    if (pop)
+    {
+      DGAccumulator_max.reduce(p_bc[src]);
+      DGAccumulator_min.reduce(p_bc[src]);
+      DGAccumulator_sum.reduce(p_bc[src]);
+    }
+  }
+  DGAccumulator_sum.thread_exit<cub::BlockReduce<float, TB_SIZE> >(DGAccumulator_sum_ts);
+  DGAccumulator_max.thread_exit<cub::BlockReduce<float, TB_SIZE> >(DGAccumulator_max_ts);
+  DGAccumulator_min.thread_exit<cub::BlockReduce<float, TB_SIZE> >(DGAccumulator_min_ts);
+}
 
 
-
-void Sanity_cuda(struct CUDA_Context* ctx);
+void Sanity_cuda(float & DGAccumulator_sum, float & DGAccumulator_max, float & DGAccumulator_min, struct CUDA_Context* ctx) {
+  dim3 blocks;
+  dim3 threads;
+  HGAccumulator<float> _DGAccumulator_sum;
+  HGReduceMax<float> _DGAccumulator_max;
+  HGReduceMin<float> _DGAccumulator_min;
+  kernel_sizing(blocks, threads);
+  Shared<float> DGAccumulator_sumval  = Shared<float>(1);
+  *(DGAccumulator_sumval.cpu_wr_ptr()) = 0;
+  _DGAccumulator_sum.rv = DGAccumulator_sumval.gpu_wr_ptr();
+  Shared<float> DGAccumulator_maxval  = Shared<float>(1);
+  *(DGAccumulator_maxval.cpu_wr_ptr()) = 0;
+  _DGAccumulator_max.rv = DGAccumulator_maxval.gpu_wr_ptr();
+  Shared<float> DGAccumulator_minval  = Shared<float>(1);
+  *(DGAccumulator_minval.cpu_wr_ptr()) = 0;
+  _DGAccumulator_min.rv = DGAccumulator_minval.gpu_wr_ptr();
+  Sanity_kernel <<<blocks, threads>>>(ctx->gg, 0, ctx->gg.nnodes, ctx->bc.data.gpu_wr_ptr(), _DGAccumulator_sum, _DGAccumulator_max, _DGAccumulator_min);
+  cudaDeviceSynchronize();
+  check_cuda_kernel;
+  DGAccumulator_sum = *(DGAccumulator_sumval.cpu_rd_ptr());
+  DGAccumulator_max = *(DGAccumulator_maxval.cpu_rd_ptr());
+  DGAccumulator_min = *(DGAccumulator_minval.cpu_rd_ptr());
+}
 
 
 

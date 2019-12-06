@@ -276,7 +276,7 @@ void InitializeIteration(Graph& graph,
         for (unsigned i = 0; i < numSourcesPerRound; i++) {
           // min distance and short path count setup
           if (nodesToConsider[i] == graph.getGID(curNode)) { // source node
-            printf("** WESTON ** if true for i = %u\n", i);
+            //printf("** WESTON ** if true for i = %u\n", i);
             cur_data.sourceData[i].minDistance = 0;
             cur_data.sourceData[i].shortPathCount = 1;
             cur_data.sourceData[i].dependencyValue = 0.0;
@@ -290,7 +290,7 @@ void InitializeIteration(Graph& graph,
       },
       galois::loopname(syncSubstrate->get_run_identifier("InitializeIteration").c_str()),
       galois::no_stats());
-  DumpAlgorithmCheckpoint(graph);
+  //DumpAlgorithmCheckpoint(graph);
 };
 
 /**
@@ -353,7 +353,7 @@ void FindMessageToSync(Graph& graph, const uint32_t roundNumber,
 void ConfirmMessageToSend(Graph& graph, const uint32_t roundNumber,
                           galois::DGAccumulator<uint32_t>& dga) {
   const auto& allNodes = graph.allNodesRange();
-  DumpAlgorithmCheckpoint(graph);
+  //DumpAlgorithmCheckpoint(graph);
 #ifdef __GALOIS_HET_CUDA__
   if (personality == GPU_CUDA) {
     galois::gDebug("In ConfirmMessageToSend\n");
@@ -376,7 +376,7 @@ void ConfirmMessageToSend(Graph& graph, const uint32_t roundNumber,
       galois::loopname(
           syncSubstrate->get_run_identifier("ConfirmMessageToSend").c_str()),
       galois::no_stats());
-  DumpAlgorithmCheckpoint(graph);
+  //DumpAlgorithmCheckpoint(graph);
 }
 
 /**
@@ -534,6 +534,7 @@ void BackFindMessageToSend(Graph& graph, const uint32_t roundNumber,
   // that needs to be sync'd
   const auto& allNodes = graph.allNodesRange();
 
+  //DumpAlgorithmCheckpoint(graph);
 #ifdef __GALOIS_HET_CUDA__
   if (personality == GPU_CUDA) {
     galois::gDebug("In BackFindMessageToSend\n");
@@ -667,6 +668,7 @@ void BC(Graph& graph, const std::vector<uint64_t>& nodesToConsider) {
   const auto& masterNodes = graph.masterNodesRange();
   syncSubstrate->set_num_round(0);
 
+  //DumpAlgorithmCheckpoint(graph);
 #ifdef __GALOIS_HET_CUDA__
   if (personality == GPU_CUDA) {
     galois::gDebug("In BC\n");

@@ -279,7 +279,7 @@ public:
       curKey = size-1;
 
       // find largest non-empty distance
-      while (bitset_vector[curKey].none() && curKey != npos) {
+      while (curKey != npos && bitset_vector[curKey].none()) {
         if (curKey == 0) {
           curKey = npos;
         } else {
@@ -331,7 +331,12 @@ public:
         } else {
           // set exhausted; go onto next set
           // find largest non-empty distance
-          while (bitset_vector[curKey].none() && curKey != npos) {
+          if (curKey == 0) {
+            curKey = npos;
+          } else {
+            curKey--;
+          }
+          while (curKey != npos && bitset_vector[curKey].none()) {
             if (curKey == 0) {
               curKey = npos;
             } else {
@@ -354,7 +359,7 @@ public:
     if (curKey == npos) {
       //assert(numSentSources == 0);
       // TODO: WESTON: cuda assert?
-      printf("** WESTON ** ERROR: numSentSources == %u (not 0 as expected)\n", numSentSources);
+      //printf("** WESTON ** ERROR: numSentSources == %u (not 0 as expected)\n", numSentSources);
     }
 
     return indexToReturn;

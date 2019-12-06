@@ -108,7 +108,6 @@ __global__ void InitializeIteration_kernel(
     for (index_type i = 0; i < numSourcesPerRound; i++) {
       unsigned int index = src + (i * graph.nnodes);
       if (graph.node_data[src] == cuda_nodes_to_consider[i]) {
-        printf("** WESTON ** if true for i = %u\n", i);
         p_minDistances[index] = 0;
         p_shortPathCount[index] = 1;
         p_dependency[index] = 0.0;
@@ -858,7 +857,7 @@ __global__ void Dump_kernel(
           p_roundIndexToSend[src],
           p_bc[src]);
 
-      printf("%d CHECKPOINT node: %09lu tree size: %u sent_src: %u non_inf: %u zero: %s\n",
+      printf("%d CHECKPOINT node: %09lu tree size: %lu sent_src: %u non_inf: %u zero: %s\n",
           checkpoint_num,
           //graph.node_data[src],
           node_id,
@@ -903,7 +902,6 @@ __global__ void Dump_kernel(
 
       node_id += nthreads;
     }
-
 }
 
 

@@ -108,6 +108,7 @@ __global__ void InitializeIteration_kernel(
     for (index_type i = 0; i < numSourcesPerRound; i++) {
       unsigned int index = src + (i * graph.nnodes);
       if (graph.node_data[src] == cuda_nodes_to_consider[i]) {
+        printf("** WESTON ** if true for i = %u\n", i);
         p_minDistances[index] = 0;
         p_shortPathCount[index] = 1;
         p_dependency[index] = 0.0;
@@ -517,7 +518,7 @@ __global__ void BackFindMessageToSend_kernel(
     src_end = __end;
     for (index_type src = __begin + tid; src < src_end; src += nthreads)
     {
-      if (p_mrbc_tree[src].isZeroReached()) {
+      if (!p_mrbc_tree[src].isZeroReached()) {
         p_roundIndexToSend[src] = 
           p_mrbc_tree[src].backGetIndexToSend(roundNumber, lastRoundNumber, local_infinity);
 
@@ -614,6 +615,8 @@ __global__ void BackProp_kernel(
     index_type dst_end;
 
     dst_end = __end;
+
+    //printf("** WESTON ** in back prop kernel\n");
     for (index_type dst = __begin + tid; dst < dst_end; dst += nthreads)
     {
       unsigned i = p_roundIndexToSend[dst];
@@ -827,7 +830,10 @@ __global__ void Dump_kernel(
        int numSourcesPerRound,
        uint32_t * p_roundIndexToSend,
        uint32_t * p_minDistances,
-       float* p_bc)
+       double * p_shortPathCount,
+       float * p_dependency,
+       float* p_bc,
+       MRBCTree_cuda * p_mrbc_tree)
 {
     unsigned tid = TID_1D;
     unsigned nthreads = TOTAL_THREADS_1D;
@@ -852,6 +858,27 @@ __global__ void Dump_kernel(
           p_roundIndexToSend[src],
           p_bc[src]);
 
+      printf("%d CHECKPOINT node: %09lu tree size: %u sent_src: %u non_inf: %u zero: %s\n",
+          checkpoint_num,
+          //graph.node_data[src],
+          node_id,
+          p_mrbc_tree[src].size,
+          p_mrbc_tree[src].numSentSources,
+          p_mrbc_tree[src].numNonInfinity,
+          p_mrbc_tree[src].zeroReached ? "true" : "false");
+
+
+      for (unsigned i = 0; i < p_mrbc_tree[src].size; i++ ) {
+        printf("%d CHECKPOINT node: %09lu tree index: %u dist: %u bitset: 0x%lx\n",
+            checkpoint_num,
+            //graph.node_data[src],
+            node_id,
+            i,
+            p_mrbc_tree[src].dist_vector[i],
+            p_mrbc_tree[src].bitset_vector[i].bit_vector[0]);
+        
+      }
+
       for (unsigned i = 0; i < numSourcesPerRound; i++) {
 
         printf("%d CHECKPOINT node: %09lu sourceIndex: %d minDistance: %u\n",
@@ -859,6 +886,18 @@ __global__ void Dump_kernel(
             node_id,
             i,
             p_minDistances[src + (i * graph.nnodes)]);
+
+        printf("%d CHECKPOINT node: %09lu sourceIndex: %d shortPathCount: %g\n",
+            checkpoint_num,
+            node_id,
+            i,
+            p_shortPathCount[src + (i * graph.nnodes)]);
+
+        printf("%d CHECKPOINT node: %09lu sourceIndex: %d dependency: %g\n",
+            checkpoint_num,
+            node_id,
+            i,
+            p_dependency[src + (i * graph.nnodes)]);
 
       }
 
@@ -887,7 +926,10 @@ void DumpAlgorithmCheckpoint_cuda(
           ctx->vectorSize,
           ctx->roundIndexToSend.data.gpu_wr_ptr(),
           ctx->minDistances.data.gpu_wr_ptr(),
-          ctx->bc.data.gpu_wr_ptr());
+          ctx->shortPathCount.data.gpu_wr_ptr(),
+          ctx->dependency.data.gpu_wr_ptr(),
+          ctx->bc.data.gpu_wr_ptr(),
+          ctx->mrbc_tree.data.gpu_wr_ptr());
   cudaDeviceSynchronize();
   check_cuda_kernel;
 }

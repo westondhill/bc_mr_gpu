@@ -32,11 +32,11 @@ const uint32_t infinity = std::numeric_limits<uint32_t>::max() >> 2;
  */
 class MRBCTree_cuda {
   
+public: // TODO: WESTON: remove this
   using BitSet = MRBCBitSet_cuda;
   //using FlatMap = boost::container::flat_map<uint32_t, BitSet,
   //                                            std::less<uint32_t>,
   //                                            galois::gstl::Pow2Alloc<std::pair<uint32_t, BitSet>>>;
-
   //! map to a bitset of nodes that belong in a particular distance group
   uint32_t* dist_vector;
   BitSet* bitset_vector;
@@ -70,6 +70,8 @@ public:
    * vector and num sent sources.
    */
   __device__ void initialize() {
+
+    //printf("**WESTON** initialize called\n");
 
     if (dist_vector) {
       free(dist_vector);
@@ -177,7 +179,9 @@ public:
     //printf("** WESTON ** bitset: %x\n", bitset_vector[size-1].bit_vector[0]);
     //printf("** WESTON ** indicator: %x\n", bitset_vector[size-1].getIndicator());
 
+    //printf("** WESTON ** non_inf: %u\n", numNonInfinity);
     numNonInfinity++;
+    //printf("** WESTON ** non_inf: %u\n", numNonInfinity);
   }
 
 /*** FindMessageToSync ********************************************************/
@@ -305,42 +309,44 @@ public:
                               uint32_t local_infinity) {
     uint32_t indexToReturn = local_infinity;
 
-    while (curKey != npos) {
-      uint32_t distance = dist_vector[curKey];
-      if ((distance + numSentSources - 1) != (lastRound - roundNumber)){
-        // round to send not reached yet; get out
-        return local_infinity;
-      }
-
-      if (distance == 0) {
-        zeroReached = true;
-        return local_infinity;
-      }
-
-      BitSet& curSet = bitset_vector[curKey];
-      if (!curSet.nposInd()) {
-          // this number should be sent out this round
-          indexToReturn = curSet.backward_indicator();
-          numSentSources--;
-          break;
-      } else {
-        // set exhausted; go onto next set
-        // find largest non-empty distance
-        while (bitset_vector[curKey].none() && curKey != npos) {
-          if (curKey == 0) {
-            curKey = npos;
-          } else {
-            curKey--;
-          }
+    if (size > 0) {
+      while (curKey != npos) {
+        uint32_t distance = dist_vector[curKey];
+        if ((distance + numSentSources - 1) != (lastRound - roundNumber)){
+          // round to send not reached yet; get out
+          return local_infinity;
         }
 
-        // if another set exists, set it up, else do nothing
-        if (curKey != npos) {
-          BitSet& nextSet = bitset_vector[curKey];
-          #ifdef FLIP_MODE
-            nextSet.flip();
-          #endif
-          nextSet.backward_indicator();
+        if (distance == 0) {
+          zeroReached = true;
+          return local_infinity;
+        }
+
+        BitSet& curSet = bitset_vector[curKey];
+        if (!curSet.nposInd()) {
+            // this number should be sent out this round
+            indexToReturn = curSet.backward_indicator();
+            numSentSources--;
+            break;
+        } else {
+          // set exhausted; go onto next set
+          // find largest non-empty distance
+          while (bitset_vector[curKey].none() && curKey != npos) {
+            if (curKey == 0) {
+              curKey = npos;
+            } else {
+              curKey--;
+            }
+          }
+
+          // if another set exists, set it up, else do nothing
+          if (curKey != npos) {
+            BitSet& nextSet = bitset_vector[curKey];
+            #ifdef FLIP_MODE
+              nextSet.flip();
+            #endif
+            nextSet.backward_indicator();
+          }
         }
       }
     }
@@ -348,6 +354,7 @@ public:
     if (curKey == npos) {
       //assert(numSentSources == 0);
       // TODO: WESTON: cuda assert?
+      printf("** WESTON ** ERROR: numSentSources == %u (not 0 as expected)\n", numSentSources);
     }
 
     return indexToReturn;

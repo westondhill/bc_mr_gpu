@@ -29,6 +29,7 @@ const uint32_t infinity = std::numeric_limits<uint32_t>::max() >> 2;
  * easier.
  */
 class MRBCTree {
+  public: // TODO: WESTON: remove this
   using BitSet = MRBCBitSet;
   using FlatMap = boost::container::flat_map<uint32_t, BitSet,
                                               std::less<uint32_t>,

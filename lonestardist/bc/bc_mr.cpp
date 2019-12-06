@@ -152,12 +152,48 @@ void DumpAlgorithmCheckpoint(Graph& graph) {
               cur_data.roundIndexToSend,
               cur_data.bc);
 
+          printf("%d CHECKPOINT node: %09lu tree size: %lu sent_src: %u non_inf: %u zero: %s\n",
+              checkpoint_num,
+              graph.getGID(curNode),
+              cur_data.dTree.distanceTree.size(),
+              cur_data.dTree.numSentSources,
+              cur_data.dTree.numNonInfinity,
+              cur_data.dTree.zeroReached ? "true" : "false");
+     
+     
+          unsigned j = 0;
+          for (auto it = cur_data.dTree.distanceTree.begin(); 
+                it != cur_data.dTree.distanceTree.end(); it++) { 
+
+            printf("%d CHECKPOINT node: %09lu tree index: %u dist: %u bitset: 0x%lx\n",
+                checkpoint_num,
+                graph.getGID(curNode),
+                j,
+                it->first,
+                it->second.bitvec[0].load());
+         
+            j++;
+          
+          }
+
           for (unsigned i = 0; i < numSourcesPerRound; i++) {
             printf("%d CHECKPOINT node: %09lu sourceIndex: %d minDistance: %u\n",
                 checkpoint_num,
                 graph.getGID(curNode),
                 i,
                 cur_data.sourceData[i].minDistance);
+            printf("%d CHECKPOINT node: %09lu sourceIndex: %d shortPathCount: %g\n",
+                checkpoint_num,
+                graph.getGID(curNode),
+                i,  
+                cur_data.sourceData[i].shortPathCount);
+ 
+            printf("%d CHECKPOINT node: %09lu sourceIndex: %d dependency: %g\n",
+                checkpoint_num,
+                graph.getGID(curNode),
+                i,  
+                cur_data.sourceData[i].dependencyValue.load());
+ 
           }
         },
         galois::loopname(syncSubstrate->get_run_identifier("DumpAlgorithmCheckpoint").c_str()),
@@ -240,6 +276,7 @@ void InitializeIteration(Graph& graph,
         for (unsigned i = 0; i < numSourcesPerRound; i++) {
           // min distance and short path count setup
           if (nodesToConsider[i] == graph.getGID(curNode)) { // source node
+            printf("** WESTON ** if true for i = %u\n", i);
             cur_data.sourceData[i].minDistance = 0;
             cur_data.sourceData[i].shortPathCount = 1;
             cur_data.sourceData[i].dependencyValue = 0.0;
@@ -253,7 +290,7 @@ void InitializeIteration(Graph& graph,
       },
       galois::loopname(syncSubstrate->get_run_identifier("InitializeIteration").c_str()),
       galois::no_stats());
-  //DumpAlgorithmCheckpoint(graph);
+  DumpAlgorithmCheckpoint(graph);
 };
 
 /**
@@ -302,7 +339,7 @@ void FindMessageToSync(Graph& graph, const uint32_t roundNumber,
           syncSubstrate->get_run_identifier("FindMessageToSync").c_str()),
       galois::steal(),
       galois::no_stats());
-  DumpAlgorithmCheckpoint(graph);
+  //DumpAlgorithmCheckpoint(graph);
 }
 
 /**
@@ -316,6 +353,7 @@ void FindMessageToSync(Graph& graph, const uint32_t roundNumber,
 void ConfirmMessageToSend(Graph& graph, const uint32_t roundNumber,
                           galois::DGAccumulator<uint32_t>& dga) {
   const auto& allNodes = graph.allNodesRange();
+  DumpAlgorithmCheckpoint(graph);
 #ifdef __GALOIS_HET_CUDA__
   if (personality == GPU_CUDA) {
     galois::gDebug("In ConfirmMessageToSend\n");
@@ -338,7 +376,7 @@ void ConfirmMessageToSend(Graph& graph, const uint32_t roundNumber,
       galois::loopname(
           syncSubstrate->get_run_identifier("ConfirmMessageToSend").c_str()),
       galois::no_stats());
-  //DumpAlgorithmCheckpoint(graph);
+  DumpAlgorithmCheckpoint(graph);
 }
 
 /**
@@ -592,6 +630,7 @@ void BackProp(Graph& graph, const uint32_t lastRoundNumber) {
                Bitset_dependency>(
         std::string("DependencySync"));
 
+  //DumpAlgorithmCheckpoint(graph);
 #ifdef __GALOIS_HET_CUDA__
     if (personality == GPU_CUDA) {
       galois::gDebug("In BackProp\n");
@@ -613,8 +652,8 @@ void BackProp(Graph& graph, const uint32_t lastRoundNumber) {
         galois::no_stats());
 
     currentRound++;
-  //DumpAlgorithmCheckpoint(graph);
   }
+  //DumpAlgorithmCheckpoint(graph);
 }
 
 /**

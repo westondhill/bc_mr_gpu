@@ -18,7 +18,6 @@
  */
 
 #include "bc_mr_parameters.h"
-// TODO: WESTON: is the /cuda/ part necessary?
 #include "galois/cuda/DynamicBitset.h"
 //#include "galois/DynamicBitset.h"
 //#include <boost/random/detail/integer_log2.hpp>
@@ -125,9 +124,7 @@ public:
 
   #ifdef USE_INDICATOR
   // Accessors
-  // TODO: WESTON: USED
   __device__ size_t getIndicator() const { return indicator; }
-  // TODO: WESTON: USED
   __device__ void setIndicator(size_t index) { indicator = index; }
   #endif
 
@@ -140,7 +137,6 @@ public:
 
   //! Constructor which initializes to an empty bitset.
   __device__ MRBCBitSet_cuda() {
-    // TODO: WESTON: deal with bitsets less than 64 bits?
     resize(NUM_SOURCES_PER_ROUND);
     #ifdef USE_INDICATOR
       indicator = npos;
@@ -207,7 +203,6 @@ public:
   // using Base::resize;
   #else
   // @DynamicBitSet
-  // TODO: WESTON: USED
   __device__ void reset() { 
     for (size_t i = 0; i < vec_size(); i++) {
       bit_vector[i] = (uint64_t) 0;
@@ -250,7 +245,6 @@ public:
     /**
      * Set a bit with the side-effect updating indicator to the first.
      */
-     // TODO: WESTON: USED
     __device__ void set_indicator(size_t pos) {
       #ifdef REVERSE_MODE
         set(reverse(pos));
@@ -262,7 +256,6 @@ public:
       }
     }
 
-  // TODO: WESTON: USED
     __device__ bool test_set_indicator(size_t pos, bool val=true) {
       #ifdef REVERSE_MODE
         if (test_set(reverse(pos), val)) {
@@ -388,7 +381,6 @@ public:
     /**
      * To move indicator to the previous set bit, and return the old value.
      */
-  // TODO: WESTON: USED
     __device__ size_t forward_indicator() {
       return forward_iterate(indicator);
     }
@@ -396,14 +388,12 @@ public:
     /**
      * To move indicator to the next set bit.
      */
-     // TODO: WESTON: USED
     __device__ size_t backward_indicator() {
       return backward_iterate(indicator);
     }
   #endif
 
 
-  // TODO: WESTON: USED
   __device__ static void swap(MRBCBitSet_cuda* a, MRBCBitSet_cuda* b) {
     if (a != b) {
       size_t capacity_temp = a->num_bits_capacity;

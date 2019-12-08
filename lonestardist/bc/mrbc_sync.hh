@@ -22,8 +22,6 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 
-// TODO: WESTON: look at APSPReduce, do we need to do this?
-
 struct APSPReduce {
   using ValTy = galois::TupleOfThree<uint32_t, uint32_t, ShortPathType>;
 

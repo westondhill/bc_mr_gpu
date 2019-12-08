@@ -22,8 +22,6 @@
 //#include "mrbc_bitset.hh"
 #include "mrbc_bitset_cuda.cuh"
 
-// TODO: WESTON: use __forceinline__ or __inline__ ?
-
 const uint32_t infinity = std::numeric_limits<uint32_t>::max() >> 2;
 
 /**
@@ -32,7 +30,6 @@ const uint32_t infinity = std::numeric_limits<uint32_t>::max() >> 2;
  */
 class MRBCTree_cuda {
   
-public: // TODO: WESTON: remove this
   using BitSet = MRBCBitSet_cuda;
   //using FlatMap = boost::container::flat_map<uint32_t, BitSet,
   //                                            std::less<uint32_t>,
@@ -71,8 +68,6 @@ public:
    */
   __device__ void initialize() {
 
-    //printf("**WESTON** initialize called\n");
-
     if (dist_vector) {
       free(dist_vector);
       dist_vector = 0;
@@ -99,7 +94,6 @@ public:
     if (size >= capacity) {
       size_t new_capacity;
       if (capacity == 0) {
-        // TODO: WESTON: investigate this default capacity
         new_capacity = 8;
       } else {
         new_capacity = capacity * 2;
@@ -166,7 +160,6 @@ public:
    * Assumes you're adding a NEW distance; i.e. there better not be a duplicate
    * of index somewhere.
    */
-   // TODO: WESTON: messes up sorted order
   __device__ void setDistance(uint32_t index, uint32_t newDistance) {
     // Only for iterstion initialization
     // assert(newDistance == 0);
@@ -176,12 +169,7 @@ public:
     push_back(newDistance);
     bitset_vector[size-1].set_indicator(index);
 
-    //printf("** WESTON ** bitset: %x\n", bitset_vector[size-1].bit_vector[0]);
-    //printf("** WESTON ** indicator: %x\n", bitset_vector[size-1].getIndicator());
-
-    //printf("** WESTON ** non_inf: %u\n", numNonInfinity);
     numNonInfinity++;
-    //printf("** WESTON ** non_inf: %u\n", numNonInfinity);
   }
 
 /*** FindMessageToSync ********************************************************/
@@ -200,7 +188,6 @@ public:
       if (index != setToCheck.npos) {
         indexToSend = index;
       }
-      //printf("** WESTON ** index: %u\n", index);
     }
     return indexToSend;
   }
@@ -358,8 +345,6 @@ public:
 
     if (curKey == npos) {
       //assert(numSentSources == 0);
-      // TODO: WESTON: cuda assert?
-      //printf("** WESTON ** ERROR: numSentSources == %u (not 0 as expected)\n", numSentSources);
     }
 
     return indexToReturn;

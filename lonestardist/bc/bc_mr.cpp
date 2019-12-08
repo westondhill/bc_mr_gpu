@@ -116,95 +116,6 @@ galois::graphs::GluonSubstrate<Graph>* syncSubstrate;
 // moved here for access to ShortPathType, NodeData, DynamicBitSets
 #include "mrbc_sync.hh"
 
-
-void DumpAlgorithmCheckpoint(Graph& graph) {
-#ifdef DUMP_CHECKPOINTS
-  static int checkpoint_num = 0;
-  const auto& allNodes = graph.allNodesRange();
-
-  if (checkpoint_num >= MAX_CHECKPOINTS) {
-    printf("%d CHECKPOINT ELIDED\n", checkpoint_num);
-  } else {
-    #ifdef __GALOIS_HET_CUDA__
-    if (personality == GPU_CUDA) {
-      DumpAlgorithmCheckpoint_cuda(cuda_ctx, checkpoint_num);
-    } else if (personality == CPU)
-    #endif
-    {
-      galois::do_all(
-        galois::iterate(allNodes.begin(), allNodes.end()),
-        [&](GNode curNode) {
-          NodeData& cur_data = graph.getData(curNode);
-
-          //gPrint(checkpoint_num, " CHECKPOINT",
-          //    " node: ", cur_data,
-          //    " roundIndexToSend: ", cur_data.roundIndexToSend,
-          //    " bc: ", cur_data.bc,
-          //    "\n");
-          //std::cout << checkpoint_num << " CHECKPOINT"
-          //    << " node: " << graph.getGID(curNode)
-          //    << " roundIndexToSend: " << cur_data.roundIndexToSend
-          //    << " bc: "<< cur_data.bc
-          //    << "\n";
-          printf("%d CHECKPOINT node: %09lu roundIndexToSend: %u bc: %g\n",
-              checkpoint_num,
-              graph.getGID(curNode),
-              cur_data.roundIndexToSend,
-              cur_data.bc);
-
-          printf("%d CHECKPOINT node: %09lu tree size: %lu sent_src: %u non_inf: %u zero: %s\n",
-              checkpoint_num,
-              graph.getGID(curNode),
-              cur_data.dTree.distanceTree.size(),
-              cur_data.dTree.numSentSources,
-              cur_data.dTree.numNonInfinity,
-              cur_data.dTree.zeroReached ? "true" : "false");
-     
-     
-          unsigned j = 0;
-          for (auto it = cur_data.dTree.distanceTree.begin(); 
-                it != cur_data.dTree.distanceTree.end(); it++) { 
-
-            printf("%d CHECKPOINT node: %09lu tree index: %u dist: %u bitset: 0x%lx\n",
-                checkpoint_num,
-                graph.getGID(curNode),
-                j,
-                it->first,
-                it->second.bitvec[0].load());
-         
-            j++;
-          
-          }
-
-          for (unsigned i = 0; i < numSourcesPerRound; i++) {
-            printf("%d CHECKPOINT node: %09lu sourceIndex: %d minDistance: %u\n",
-                checkpoint_num,
-                graph.getGID(curNode),
-                i,
-                cur_data.sourceData[i].minDistance);
-            printf("%d CHECKPOINT node: %09lu sourceIndex: %d shortPathCount: %g\n",
-                checkpoint_num,
-                graph.getGID(curNode),
-                i,  
-                cur_data.sourceData[i].shortPathCount);
- 
-            printf("%d CHECKPOINT node: %09lu sourceIndex: %d dependency: %g\n",
-                checkpoint_num,
-                graph.getGID(curNode),
-                i,  
-                cur_data.sourceData[i].dependencyValue.load());
- 
-          }
-        },
-        galois::loopname(syncSubstrate->get_run_identifier("DumpAlgorithmCheckpoint").c_str()),
-        galois::no_stats()); // Only stats the runtime by loopname
-    }
-  }
-
-  checkpoint_num++;
-#endif
-}
-
 /******************************************************************************/
 /* Functions for running the algorithm */
 /******************************************************************************/
@@ -218,19 +129,14 @@ void InitializeGraph(Graph& graph) {
   const auto& allNodes = graph.allNodesRange();
 
   #ifdef __GALOIS_HET_CUDA__
-  galois::gDebug("Elena in CUDA if\n");
   if (personality == GPU_CUDA) {
-    galois::gDebug("Elena personality == GPU\n");
     std::string impl_str("InitializeGraph");
     galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
     StatTimer_cuda.start();
     InitializeGraph_allNodes_cuda(cuda_ctx);
     StatTimer_cuda.stop();
-    galois::gDebug("Elena finished InitializeGraph kernel\n");
   } else if (personality == CPU)
   #endif
-  {
-  galois::gDebug("Elena About to do doAll loop\n");
   galois::do_all(
       galois::iterate(allNodes.begin(), allNodes.end()),
       [&](GNode curNode) {
@@ -240,10 +146,6 @@ void InitializeGraph(Graph& graph) {
       },
       galois::loopname(syncSubstrate->get_run_identifier("InitializeGraph").c_str()),
       galois::no_stats()); // Only stats the runtime by loopname
-  }
-  galois::gDebug("Elena exiting InitializeGraph\n");
-
-  //DumpAlgorithmCheckpoint(graph);
 }
 
 /**
@@ -257,14 +159,12 @@ void InitializeIteration(Graph& graph,
                          const std::vector<uint64_t>& nodesToConsider) {
   const auto& allNodes = graph.allNodesRange();
 #ifdef __GALOIS_HET_CUDA__
-  galois::gDebug("In CUDA if InitializeIteration\n");
   if (personality == GPU_CUDA) {
     std::string impl_str("InitializeIteration");
     galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
     StatTimer_cuda.start();
     InitializeIteration_allNodes_cuda(infinity, nodesToConsider.data(), cuda_ctx);
     StatTimer_cuda.stop();
-    galois::gDebug("Finished InitializeIteration kernel\n");
   } else if (personality == CPU)                                         
 #endif
   galois::do_all(
@@ -276,7 +176,6 @@ void InitializeIteration(Graph& graph,
         for (unsigned i = 0; i < numSourcesPerRound; i++) {
           // min distance and short path count setup
           if (nodesToConsider[i] == graph.getGID(curNode)) { // source node
-            //printf("** WESTON ** if true for i = %u\n", i);
             cur_data.sourceData[i].minDistance = 0;
             cur_data.sourceData[i].shortPathCount = 1;
             cur_data.sourceData[i].dependencyValue = 0.0;
@@ -308,16 +207,13 @@ void FindMessageToSync(Graph& graph, const uint32_t roundNumber,
 
 #ifdef __GALOIS_HET_CUDA__
   if (personality == GPU_CUDA) {
-    galois::gDebug("FindMessageToSync\n");
     std::string impl_str("FindMessageToSync");
     galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
     StatTimer_cuda.start();
     uint32_t retval = 0;
     FindMessageToSync_cuda(roundNumber, infinity, retval, cuda_ctx);
-    //galois::gPrint("retval = ", retval, "\n");
     dga += retval;
     StatTimer_cuda.stop();
-    galois::gDebug("Finished FindMessageToSync kernel\n");
   } else if (personality == CPU)
 #endif
   galois::do_all(
@@ -339,7 +235,6 @@ void FindMessageToSync(Graph& graph, const uint32_t roundNumber,
           syncSubstrate->get_run_identifier("FindMessageToSync").c_str()),
       galois::steal(),
       galois::no_stats());
-  //DumpAlgorithmCheckpoint(graph);
 }
 
 /**
@@ -356,13 +251,11 @@ void ConfirmMessageToSend(Graph& graph, const uint32_t roundNumber,
   //DumpAlgorithmCheckpoint(graph);
 #ifdef __GALOIS_HET_CUDA__
   if (personality == GPU_CUDA) {
-    galois::gDebug("In ConfirmMessageToSend\n");
     std::string impl_str("ConfirmMessageToSend");
     galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
     StatTimer_cuda.start();
     ConfirmMessageToSend_cuda(roundNumber, infinity, cuda_ctx);
     StatTimer_cuda.stop();
-    galois::gDebug("ConfirmMessageToSend kernel done\n");
   } else if (personality == CPU)
 #endif
   galois::do_all(
@@ -376,7 +269,6 @@ void ConfirmMessageToSend(Graph& graph, const uint32_t roundNumber,
       galois::loopname(
           syncSubstrate->get_run_identifier("ConfirmMessageToSend").c_str()),
       galois::no_stats());
-  //DumpAlgorithmCheckpoint(graph);
 }
 
 /**
@@ -427,16 +319,13 @@ void SendAPSPMessages(Graph& graph, galois::DGAccumulator<uint32_t>& dga) {
   const auto& allNodesWithEdges = graph.allNodesWithEdgesRange();
 #ifdef __GALOIS_HET_CUDA__
   if (personality == GPU_CUDA) {
-    galois::gDebug("In SendAPSPMessages\n");
     std::string impl_str("SendAPSPMessages");
     galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
     StatTimer_cuda.start();
     uint32_t retval = 0;
     SendAPSPMessages_cuda(infinity, retval, cuda_ctx);
-    //galois::gPrint("retval = ", retval, "\n");
     dga += retval;
     StatTimer_cuda.stop();
-    galois::gDebug("Finished SendAPSPMessages\n");
   } else if (personality == CPU)
 #endif
   galois::do_all(
@@ -448,7 +337,6 @@ void SendAPSPMessages(Graph& graph, galois::DGAccumulator<uint32_t>& dga) {
           syncSubstrate->get_run_identifier("SendAPSPMessages").c_str()),
       galois::steal(),
       galois::no_stats());
-  //DumpAlgorithmCheckpoint(graph);
 }
 
 /**
@@ -474,8 +362,6 @@ uint32_t APSP(Graph& graph, galois::DGAccumulator<uint32_t>& dga) {
     FindMessageToSync(graph, roundNumber, dga);
 
     // Template para's are struct names
-    // TODO: WESTON: write sync for hash of bitsets
-    //               ucomment this once mrbc_sync.hh gets uncommented
     syncSubstrate->sync<writeAny, readAny, APSPReduce,
                Bitset_minDistances>(std::string("APSP"));
 
@@ -504,12 +390,10 @@ void RoundUpdate(Graph& graph) {
   syncSubstrate->set_num_round(0);
 #ifdef __GALOIS_HET_CUDA__
   if (personality == GPU_CUDA) {
-    galois::gDebug("In RoundUpdate\n");
     std::string impl_str("RoundUpdate");
     galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
     RoundUpdate_cuda(infinity, cuda_ctx);
     StatTimer_cuda.stop();
-    galois::gDebug("Finished RoundUpdate\n");
   } else if (personality == CPU)
 #endif
   galois::do_all(
@@ -521,7 +405,6 @@ void RoundUpdate(Graph& graph) {
       galois::loopname(
           syncSubstrate->get_run_identifier("RoundUpdate").c_str()),
       galois::no_stats());
-  //DumpAlgorithmCheckpoint(graph);
 }
 
 /**
@@ -537,12 +420,10 @@ void BackFindMessageToSend(Graph& graph, const uint32_t roundNumber,
   //DumpAlgorithmCheckpoint(graph);
 #ifdef __GALOIS_HET_CUDA__
   if (personality == GPU_CUDA) {
-    galois::gDebug("In BackFindMessageToSend\n");
     std::string impl_str("BackFindMessageToSend");
     galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
     BackFindMessageToSend_cuda(infinity, roundNumber, lastRoundNumber, cuda_ctx);
     StatTimer_cuda.stop();
-    galois::gDebug("Finished BackFindMessageToSend\n");
   } else if (personality == CPU)
 #endif
   galois::do_all(
@@ -569,7 +450,6 @@ void BackFindMessageToSend(Graph& graph, const uint32_t roundNumber,
         syncSubstrate->get_run_identifier("BackFindMessageToSend").c_str()
       ),
       galois::no_stats());
-  //DumpAlgorithmCheckpoint(graph);
 }
 
 /**
@@ -626,7 +506,6 @@ void BackProp(Graph& graph, const uint32_t lastRoundNumber) {
 
     // write destination in this case being the source in the actual graph
     // since we're using the tranpose graph
-    // TODO: WESTON: write sync for hash of bitsets
     syncSubstrate->sync<writeDestination, readSource, DependencyReduce,
                Bitset_dependency>(
         std::string("DependencySync"));
@@ -634,13 +513,11 @@ void BackProp(Graph& graph, const uint32_t lastRoundNumber) {
   //DumpAlgorithmCheckpoint(graph);
 #ifdef __GALOIS_HET_CUDA__
     if (personality == GPU_CUDA) {
-      galois::gDebug("In BackProp\n");
       std::string impl_str("BackProp");
       galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
       BackProp_cuda(infinity, cuda_ctx);
       StatTimer_cuda.stop();
-      galois::gDebug("Finished BackProp\n");
-    } else if (personality == CPU)
+   } else if (personality == CPU)
 #endif
     galois::do_all(
         galois::iterate(allNodesWithEdges),
@@ -654,7 +531,6 @@ void BackProp(Graph& graph, const uint32_t lastRoundNumber) {
 
     currentRound++;
   }
-  //DumpAlgorithmCheckpoint(graph);
 }
 
 /**
@@ -668,15 +544,12 @@ void BC(Graph& graph, const std::vector<uint64_t>& nodesToConsider) {
   const auto& masterNodes = graph.masterNodesRange();
   syncSubstrate->set_num_round(0);
 
-  //DumpAlgorithmCheckpoint(graph);
 #ifdef __GALOIS_HET_CUDA__
   if (personality == GPU_CUDA) {
-    galois::gDebug("In BC\n");
     std::string impl_str("BC");
     galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
     BC_masterNodes_cuda(cuda_ctx, nodesToConsider.data());
     StatTimer_cuda.stop();
-    galois::gDebug("Finished BC\n");
   } else if (personality == CPU)
 #endif
   galois::do_all(
@@ -693,7 +566,6 @@ void BC(Graph& graph, const std::vector<uint64_t>& nodesToConsider) {
       },
       galois::loopname(syncSubstrate->get_run_identifier("BC").c_str()),
       galois::no_stats());
-  //DumpAlgorithmCheckpoint(graph);
 };
 
 /******************************************************************************/
@@ -711,7 +583,6 @@ void Sanity(Graph& graph) {
 
 #ifdef __GALOIS_HET_CUDA__
   if (personality == GPU_CUDA) {
-    galois::gDebug("In Sanity\n");
     std::string impl_str("Sanity");
     galois::StatTimer StatTimer_cuda(impl_str.c_str(), REGION_NAME);
     StatTimer_cuda.start();
@@ -721,7 +592,6 @@ void Sanity(Graph& graph) {
     DGA_max.update(max);
     DGA_min.update(min);
     StatTimer_cuda.stop();
-    galois::gDebug("Finished Sanity\n");
   } else if (personality == CPU)
 #endif
   galois::do_all(galois::iterate(graph.masterNodesRange().begin(),
@@ -745,7 +615,6 @@ void Sanity(Graph& graph) {
     galois::gPrint("Min BC is ", min_bc, "\n");
     galois::gPrint("BC sum is ", bc_sum, "\n");
   }
-  //DumpAlgorithmCheckpoint(graph);
 };
 
 /******************************************************************************/
@@ -779,12 +648,9 @@ int main(int argc, char** argv) {
   }
 
 #ifdef __GALOIS_HET_CUDA__
-   galois::gDebug("Elena in CUDA if about to call distGraphInitialization\n");
    setCUDAVectorSize(cuda_ctx, numSourcesPerRound);
    std::tie(hg, syncSubstrate) = distGraphInitialization<NodeData, void>(&cuda_ctx);  
-   galois::gDebug("Elena distGraphInitialization passed\n");
 #else
-
   // false = iterate over in edges
   std::tie(hg, syncSubstrate) = distGraphInitialization<NodeData, void, false>();
 #endif

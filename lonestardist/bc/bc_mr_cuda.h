@@ -5,19 +5,6 @@
 
 using ShortPathType = double;
 
-// TODO: WESTON: update args?
-
-//void InitializeGraph_allNodes_cuda(unsigned int __begin, unsigned int __end, struct CUDA_Context* ctx);
-//void InitializeGraph_allNodes_cuda(struct CUDA_Context* ctx);
-//void FindMessageToSync(struct CUDA_Context* ctx);
-//void ConfirmMessageToSend_cuda(struct CUDA_Context* ctx);
-//void RoundUpdate_cuda(struct CUDA_Context* ctx);
-//void BackFindMessageToSend_cuda(struct CUDA_Context* ctx);
-//void BC_masterNodes_cuda(struct CUDA_Context* ctx);
-//void Sanity_cuda(struct CUDA_Context* ctx);
-//
-//void bitset_dependency_reset_cuda(struct CUDA_Context* ctx);
-//void bitset_minDistances_reset_cuda(struct CUDA_Context* ctx);
 void setCUDAVectorSize(struct CUDA_Context* ctx, unsigned vectorSize);
 void InitializeGraph_allNodes_cuda(struct CUDA_Context* ctx);
 void InitializeIteration_allNodes_cuda(
@@ -52,11 +39,6 @@ void BC_masterNodes_cuda(
     struct CUDA_Context* ctx,
     const uint64_t* local_nodes_to_consider);
 void Sanity_cuda(float & DGAccumulator_sum, float & DGAAccumulator_max, float & DGAccumulator_min, struct CUDA_Context* ctx);
-//void bitset_dependency_reset_cuda(struct CUDA_Context* ctx);
-//void bitset_minDistances_reset_cuda(struct CUDA_Context* ctx);
-
-void DumpAlgorithmCheckpoint_cuda( struct CUDA_Context* ctx, int checkpoint_num);
-
 
 void get_bitset_minDistances_cuda(struct CUDA_Context* ctx, uint64_t* bitset_compute);
 void bitset_minDistances_reset_cuda(struct CUDA_Context* ctx);

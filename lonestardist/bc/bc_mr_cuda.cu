@@ -9,20 +9,11 @@ void kernel_sizing(CSRGraph &, dim3 &, dim3 &);
 // thread block size
 #define TB_SIZE 256
 
-//#include "kernels/reduce.cuh"
 #include "bc_mr_cuda.cuh"
 
 #include "mrbc_tree_cuda.cuh"
 
 #include <iostream>
-
-//   galois::do_all(
-//       galois::iterate(allNodes.begin(), allNodes.end()),
-//       [&](GNode curNode) {
-//         NodeData& cur_data = graph.getData(curNode);
-//         cur_data.sourceData.resize(vectorSize);
-//         cur_data.bc = 0.0;
-//       },  
 
 __global__ void InitializeGraph_kernel(
         CSRGraph graph, 
@@ -33,7 +24,6 @@ __global__ void InitializeGraph_kernel(
    unsigned tid = TID_1D;
    unsigned nthreads = TOTAL_THREADS_1D;
 
-   //const unsigned __kernel_tb_size = TB_SIZE;
    index_type src_end =  __end;
    for (index_type src = __begin + tid; src < src_end; src += nthreads)
    {
@@ -57,31 +47,6 @@ void InitializeGraph_allNodes_cuda(struct CUDA_Context* ctx) {
   check_cuda_kernel;
 }
 
-
-
-//   galois::do_all(
-//       galois::iterate(allNodes.begin(), allNodes.end()),
-//       [&](GNode curNode) {
-//         NodeData& cur_data = graph.getData(curNode);
-//         cur_data.roundIndexToSend = infinity;
-//         cur_data.dTree.initialize();
-//         for (unsigned i = 0; i < numSourcesPerRound; i++) {
-//           // min distance and short path count setup
-//           if (nodesToConsider[i] == graph.getGID(curNode)) { // source node
-//             cur_data.sourceData[i].minDistances = 0;
-//             cur_data.sourceData[i].shortPathCount = 1;
-//             cur_data.sourceData[i].dependency = 0.0;
-//             cur_data.dTree.setDistance(i, 0);
-//           } else { // non-source node
-//             cur_data.sourceData[i].minDistances = infinity;
-//             cur_data.sourceData[i].shortPathCount = 0;
-//             cur_data.sourceData[i].dependency = 0.0;
-//           }
-//         }
-//       },
-//       galois::loopname(syncSubstrate->get_run_identifier("InitializeIteration").c_str()),
-//       galois::no_stats());
-
 __global__ void InitializeIteration_kernel(
         CSRGraph graph, 
         unsigned int __begin, 
@@ -98,7 +63,6 @@ __global__ void InitializeIteration_kernel(
   unsigned tid = TID_1D;
   unsigned nthreads = TOTAL_THREADS_1D;
 
-  //const unsigned __kernel_tb_size = TB_SIZE;
   index_type src_end;
   src_end = __end;
   for (index_type src = __begin + tid; src < src_end; src += nthreads) {
@@ -136,25 +100,6 @@ void InitializeIteration_allNodes_cuda(
   cudaMalloc((void**) &cuda_nodes_to_consider, ctx->vectorSize*sizeof(uint64_t));
   cudaMemcpy(cuda_nodes_to_consider, local_nodes_to_consider, ctx->vectorSize*sizeof(uint64_t), cudaMemcpyHostToDevice);
  
-
-  //std::cout << "\n\nWESTON DEBUG BEGIN\n\n";
-  //std::cout << cuda_nodes_to_consider << std::endl;
-  //std::cout << ctx->minDistances.data.gpu_wr_ptr() << std::endl;
-  //std::cout << ctx->shortPathCount.data.gpu_wr_ptr() << std::endl;
-  //std::cout << ctx->dependency.data.gpu_wr_ptr() << std::endl;
-  //std::cout << ctx->roundIndexToSend.data.gpu_wr_ptr() << std::endl;
-  //std::cout << ctx->mrbc_tree.data.gpu_wr_ptr() << std::endl;
-  //std::cout << "\n\nWESTON DEBUG END\n\n";
-
-  //        cuda_nodes_to_consider, " ",
-  //        local_infinity, " ",
-  //        ctx->vectorSize, " ",
-  //        ctx->minDistances.data.gpu_wr_ptr(), " ",
-  //        ctx->shortPathCount.data.gpu_wr_ptr(), " ",
-  //        ctx->dependency.data.gpu_wr_ptr(), " ",
-  //        ctx->roundIndexToSend.data.gpu_wr_ptr(), " ",
-  //        ctx->mrbc_tree.data.gpu_wr_ptr(), "\n");
-
   InitializeIteration_kernel <<<blocks, threads>>>(
           ctx->gg, 
           0, 
@@ -173,25 +118,6 @@ void InitializeIteration_allNodes_cuda(
   cudaFree(cuda_nodes_to_consider);
 }
 
-
-
-
-//   galois::do_all(
-//       galois::iterate(allNodes.begin(), allNodes.end()),
-//       [&](GNode curNode) {
-//         NodeData& cur_data = graph.getData(curNode);
-//         cur_data.roundIndexToSend = cur_data.dTree.getIndexToSend(roundNumber);
-// 
-//         if (cur_data.roundIndexToSend != infinity) {
-//           if (cur_data.sourceData[cur_data.roundIndexToSend].minDistances != 0) {
-//             bitset_minDistancess.set(curNode);
-//           }
-//           dga += 1;
-//         } else if (cur_data.dTree.moreWork()) {
-//           dga += 1;
-//         }
-//       },
-
 __global__ void FindMessageToSync_kernel(
         CSRGraph graph, 
         unsigned int __begin, 
@@ -207,7 +133,6 @@ __global__ void FindMessageToSync_kernel(
     unsigned tid = TID_1D;
     unsigned nthreads = TOTAL_THREADS_1D;
 
-    //const unsigned __kernel_tb_size = TB_SIZE;
     __shared__ cub::BlockReduce<uint32_t, TB_SIZE>::TempStorage dga_ts;
     index_type src_end;
 
@@ -266,18 +191,6 @@ void FindMessageToSync_cuda(
   dga = *(dgaval.cpu_rd_ptr());
 }
 
-//   galois::do_all(
-//       galois::iterate(allNodes.begin(), allNodes.end()),
-//       [&](GNode curNode) {
-//         NodeData& cur_data = graph.getData(curNode);
-//         if (cur_data.roundIndexToSend != infinity) {
-//           cur_data.dTree.markSent(roundNumber);
-//         }
-//       },
-//       galois::loopname(
-//           syncSubstrate->get_run_identifier("ConfirmMessageToSend").c_str()),
-//       galois::no_stats());
-
 __global__ void ConfirmMessageToSend_kernel(
         CSRGraph graph, 
         unsigned int __begin, 
@@ -290,7 +203,6 @@ __global__ void ConfirmMessageToSend_kernel(
    unsigned tid = TID_1D;
    unsigned nthreads = TOTAL_THREADS_1D;
 
-   //const unsigned __kernel_tb_size = TB_SIZE;
    index_type src_end;
    src_end = __end;
    for (index_type src = __begin + tid; src < src_end; src += nthreads)
@@ -323,8 +235,6 @@ void ConfirmMessageToSend_cuda(
   check_cuda_kernel;
 }
 
-
-
 __global__ void SendAPSPMessages_kernel(
        CSRGraph graph, 
        unsigned int __begin, 
@@ -340,7 +250,6 @@ __global__ void SendAPSPMessages_kernel(
   unsigned tid = TID_1D;
   unsigned nthreads = TOTAL_THREADS_1D;
 
-  //const unsigned __kernel_tb_size = TB_SIZE;
   __shared__ cub::BlockReduce<uint32_t, TB_SIZE>::TempStorage dga_ts;
   index_type dst_end;
 
@@ -374,7 +283,6 @@ __global__ void SendAPSPMessages_kernel(
                 // add to short path
                 p_shortPathCount[dst_index] += p_shortPathCount[src_index];
             }
-
             // dga += 1
             dga.reduce(1);
         }
@@ -417,18 +325,6 @@ void SendAPSPMessages_cuda(
   dga = *(dgaval.cpu_rd_ptr());
 }
 
-
-//   galois::do_all(
-//       galois::iterate(allNodes.begin(), allNodes.end()),
-//       [&](GNode node) {
-//         NodeData& cur_data = graph.getData(node);
-//         cur_data.dTree.prepForBackPhase();
-//       },  
-//       galois::loopname(
-//           syncSubstrate->get_run_identifier("RoundUpdate").c_str()),
-//       galois::no_stats());
-
-
 __global__ void RoundUpdate_kernel(
        CSRGraph graph, 
        unsigned int __begin, 
@@ -438,7 +334,6 @@ __global__ void RoundUpdate_kernel(
     unsigned tid = TID_1D;
     unsigned nthreads = TOTAL_THREADS_1D;
 
-    //const unsigned __kernel_tb_size = TB_SIZE;
     index_type src_end;
 
     src_end = __end;
@@ -469,33 +364,6 @@ void RoundUpdate_cuda(
   check_cuda_kernel;
 }
 
-
-
-//   galois::do_all(
-//       galois::iterate(allNodes.begin(), allNodes.end()),
-//       [&](GNode dst) {
-//         NodeData& dst_data        = graph.getData(dst);
-//
-//         // if zero distances already reached, there is no point sending things
-//         // out since we don't care about dependecy for sources (i.e. distance
-//         // 0)
-//         if (!dst_data.dTree.isZeroReached()) {
-//           dst_data.roundIndexToSend =
-//             dst_data.dTree.backGetIndexToSend(roundNumber, lastRoundNumber);
-//
-//           if (dst_data.roundIndexToSend != infinity) {
-//             // only comm if not redundant 0
-//             if (dst_data.sourceData[dst_data.roundIndexToSend].dependency != 0) {
-//               bitset_dependency.set(dst);
-//             }
-//           }
-//         }
-//       },
-//       galois::loopname(
-//         syncSubstrate->get_run_identifier("BackFindMessageToSend").c_str()
-//       ),
-//       galois::no_stats());
-
 __global__ void BackFindMessageToSend_kernel(
        CSRGraph graph, 
        unsigned int __begin, 
@@ -511,7 +379,6 @@ __global__ void BackFindMessageToSend_kernel(
     unsigned tid = TID_1D;
     unsigned nthreads = TOTAL_THREADS_1D;
 
-    //const unsigned __kernel_tb_size = TB_SIZE;
     index_type src_end;
 
     src_end = __end;
@@ -560,42 +427,6 @@ void BackFindMessageToSend_cuda(
   check_cuda_kernel;
 }
 
-
-// void BackPropOp(GNode dst, Graph& graph) {
-//   NodeData& dst_data = graph.getData(dst);
-//   unsigned i         = dst_data.roundIndexToSend;
-// 
-//   if (i != infinity) {
-//     uint32_t myDistance = dst_data.sourceData[i].minDistances;
-// 
-//     // calculate final dependency value
-//     dst_data.sourceData[i].dependency =
-//       dst_data.sourceData[i].dependency *
-//         dst_data.sourceData[i].shortPathCount;
-// 
-//     // get the value to add to predecessors
-//     float toAdd = ((float)1 + dst_data.sourceData[i].dependency) /
-//                   dst_data.sourceData[i].shortPathCount;
-// 
-//     for (auto inEdge : graph.edges(dst)) {
-//       GNode src      = graph.getEdgeDst(inEdge);
-//       auto& src_data = graph.getData(src);
-//       uint32_t sourceDistance = src_data.sourceData[i].minDistances;
-// 
-//       // source nodes of this batch (i.e. distance 0) can be safely
-//       // ignored
-//       if (sourceDistance != 0) {
-//         // determine if this source is a predecessor
-//         if (myDistance == (sourceDistance + 1)) {
-//           // add to dependency of predecessor using our finalized one
-//           galois::atomicAdd(src_data.sourceData[i].dependency, toAdd);
-//         }
-//       }   
-//     }   
-//   }
-// }
-
-
 __global__ void BackProp_kernel(
        CSRGraph graph, 
        unsigned int __begin, 
@@ -610,12 +441,10 @@ __global__ void BackProp_kernel(
     unsigned tid = TID_1D;
     unsigned nthreads = TOTAL_THREADS_1D;
 
-    //const unsigned __kernel_tb_size = TB_SIZE;
     index_type dst_end;
 
     dst_end = __end;
 
-    //printf("** WESTON ** in back prop kernel\n");
     for (index_type dst = __begin + tid; dst < dst_end; dst += nthreads)
     {
       unsigned i = p_roundIndexToSend[dst];
@@ -645,14 +474,10 @@ __global__ void BackProp_kernel(
               atomicAdd(&p_dependency[src + (i * graph.nnodes)], toAdd);
             }
           }
-
         }
-
       }
-    }
-
+   }
 }
-
 
 void BackProp_cuda(
     const uint32_t & local_infinity, 
@@ -677,20 +502,6 @@ void BackProp_cuda(
   cudaDeviceSynchronize();
   check_cuda_kernel;
 }
-//  galois::do_all(
-//       galois::iterate(masterNodes.begin(), masterNodes.end()),
-//       [&](GNode node) {
-//         NodeData& cur_data = graph.getData(node);
-//
-//         for (unsigned i = 0; i < numSourcesPerRound; i++) {
-//           // exclude sources themselves from BC calculation
-//           if (graph.getGID(node) != nodesToConsider[i]) {
-//             cur_data.bc += cur_data.sourceData[i].dependency;
-//           }
-//         }
-//       },
-//       galois::loopname(syncSubstrate->get_run_identifier("BC").c_str()),
-//       galois::no_stats());
 
 __global__ void BC_kernel(
        CSRGraph graph, 
@@ -699,12 +510,11 @@ __global__ void BC_kernel(
        unsigned int numSourcesPerRound,
        uint64_t *  cuda_nodes_to_consider,
        float    * p_dependency,
-       float* p_bc)
+       float    * p_bc)
 {
     unsigned tid = TID_1D;
     unsigned nthreads = TOTAL_THREADS_1D;
 
-    //const unsigned __kernel_tb_size = TB_SIZE;
     index_type src_end;
 
     src_end = __end;
@@ -748,23 +558,11 @@ void BC_masterNodes_cuda(
   cudaFree(cuda_nodes_to_consider);
 }
 
-
-//  galois::do_all(galois::iterate(graph.masterNodesRange().begin(),
-//                                  graph.masterNodesRange().end()),
-//                  [&](auto src) {
-//                    NodeData& sdata = graph.getData(src);
-//
-//                    DGA_max.update(sdata.bc);
-//                    DGA_min.update(sdata.bc);
-//                    DGA_sum += sdata.bc;
-//                  },
-//                  galois::no_stats(), galois::loopname("Sanity"));
 __global__
 void Sanity_kernel(CSRGraph graph, unsigned int __begin, unsigned int __end, float * p_bc, HGAccumulator<float> DGAccumulator_sum, HGReduceMax<float> DGAccumulator_max, HGReduceMin<float> DGAccumulator_min) {
-    unsigned tid = TID_1D;
+  unsigned tid = TID_1D;
   unsigned nthreads = TOTAL_THREADS_1D;
 
-  //const unsigned __kernel_tb_size = TB_SIZE;
   __shared__ cub::BlockReduce<float, TB_SIZE>::TempStorage DGAccumulator_sum_ts;
   __shared__ cub::BlockReduce<float, TB_SIZE>::TempStorage DGAccumulator_max_ts;
   __shared__ cub::BlockReduce<float, TB_SIZE>::TempStorage DGAccumulator_min_ts;
@@ -813,121 +611,3 @@ void Sanity_cuda(float & DGAccumulator_sum, float & DGAccumulator_max, float & D
   DGAccumulator_min = *(DGAccumulator_minval.cpu_rd_ptr());
 }
 
-
-
-// TODO: WESTON: implement bitset reset method
-//void bitset_dependency_reset_cuda(struct CUDA_Context* ctx);
-//void bitset_minDistances_reset_cuda(struct CUDA_Context* ctx);
-
-
-
-__global__ void Dump_kernel(
-       CSRGraph graph, 
-       unsigned int __begin, 
-       unsigned int __end, 
-       int checkpoint_num,
-       int numSourcesPerRound,
-       uint32_t * p_roundIndexToSend,
-       uint32_t * p_minDistances,
-       double * p_shortPathCount,
-       float * p_dependency,
-       float* p_bc,
-       MRBCTree_cuda * p_mrbc_tree)
-{
-    unsigned tid = TID_1D;
-    unsigned nthreads = TOTAL_THREADS_1D;
-
-    //const unsigned __kernel_tb_size = TB_SIZE;
-    index_type src_end;
-
-    src_end = __end;
-    uint64_t node_id = tid;
-    for (index_type src = __begin + tid; src < src_end; src += nthreads)
-    {
-      //for (unsigned i = 0; i < numSourcesPerRound; i++) {
-      //  if (graph.node_data[src] != cuda_nodes_to_consider[i]) {
-      //    p_bc[src] += p_dependency[src + (i * graph.nnodes)];
-      //  }
-      //}
-
-      printf("%d CHECKPOINT node: %09lu roundIndexToSend: %u bc: %g\n",
-          checkpoint_num,
-          //graph.node_data[src],
-          node_id,
-          p_roundIndexToSend[src],
-          p_bc[src]);
-
-      printf("%d CHECKPOINT node: %09lu tree size: %lu sent_src: %u non_inf: %u zero: %s\n",
-          checkpoint_num,
-          //graph.node_data[src],
-          node_id,
-          p_mrbc_tree[src].size,
-          p_mrbc_tree[src].numSentSources,
-          p_mrbc_tree[src].numNonInfinity,
-          p_mrbc_tree[src].zeroReached ? "true" : "false");
-
-
-      for (unsigned i = 0; i < p_mrbc_tree[src].size; i++ ) {
-        printf("%d CHECKPOINT node: %09lu tree index: %u dist: %u bitset: 0x%lx\n",
-            checkpoint_num,
-            //graph.node_data[src],
-            node_id,
-            i,
-            p_mrbc_tree[src].dist_vector[i],
-            p_mrbc_tree[src].bitset_vector[i].bit_vector[0]);
-        
-      }
-
-      for (unsigned i = 0; i < numSourcesPerRound; i++) {
-
-        printf("%d CHECKPOINT node: %09lu sourceIndex: %d minDistance: %u\n",
-            checkpoint_num,
-            node_id,
-            i,
-            p_minDistances[src + (i * graph.nnodes)]);
-
-        printf("%d CHECKPOINT node: %09lu sourceIndex: %d shortPathCount: %g\n",
-            checkpoint_num,
-            node_id,
-            i,
-            p_shortPathCount[src + (i * graph.nnodes)]);
-
-        printf("%d CHECKPOINT node: %09lu sourceIndex: %d dependency: %g\n",
-            checkpoint_num,
-            node_id,
-            i,
-            p_dependency[src + (i * graph.nnodes)]);
-
-      }
-
-      node_id += nthreads;
-    }
-}
-
-
-void DumpAlgorithmCheckpoint_cuda(
-    struct CUDA_Context*  ctx,
-    int checkpoint_num)
-{
-  dim3 blocks;
-  dim3 threads;
-
-  kernel_sizing(blocks, threads);
-
-  // Make device vector for local_nodes_to_consider
-  
-  Dump_kernel <<<blocks, threads>>>(
-          ctx->gg, 
-          0, 
-          ctx->gg.nnodes, 
-          checkpoint_num,
-          ctx->vectorSize,
-          ctx->roundIndexToSend.data.gpu_wr_ptr(),
-          ctx->minDistances.data.gpu_wr_ptr(),
-          ctx->shortPathCount.data.gpu_wr_ptr(),
-          ctx->dependency.data.gpu_wr_ptr(),
-          ctx->bc.data.gpu_wr_ptr(),
-          ctx->mrbc_tree.data.gpu_wr_ptr());
-  cudaDeviceSynchronize();
-  check_cuda_kernel;
-}
